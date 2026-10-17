@@ -27,17 +27,20 @@ Other scripts:
 | `npm test` | Runs unit tests for the document model, connectors, transforms and file format. |
 | `npm run typecheck` | Type-checks main, preload and renderer. |
 | `npm run build` / `npm start` | Production build, then runs it. |
-| `npm run dist:mac` / `npm run dist:win` | Builds installers with electron-builder. |
+| `npm run dist:mac` / `npm run dist:win` | Builds an installer (`dist/Pucklet-<version>.dmg` / `.exe`). The Mac build is unsigned for now. |
+| `npm run icon` | Re-renders `build/icon.png` from `build/icon.svg` after editing the app icon. |
 | `PUCKLET_SMOKE_DIR=/some/dir npx electron .` | After `npm run build`: launches the app, saves a screenshot, a test PDF and a JSON report to that directory, then quits. |
 
 ## What works today
 
 - **Canvas**: pan (Space/H), zoom at cursor (pinch, ⌘-scroll, ⌘0 fit), artboard presets (journal column widths, graphical abstracts, slides, A4/Letter, posters).
-- **Editing**: select, marquee, shift-select, move with smart guides, resize (keeps proportions for icons/text; Shift toggles), rotate (Shift = 15°), nudge, group/ungroup (double-click to enter), z-order, lock, duplicate, align & distribute, undo/redo (slider and colour-picker drags count as one step).
+- **Editing**: select, marquee, shift-select, move and resize with smart guides (snap to other objects and the canvas; hold ⌘ to turn off), resize keeps proportions for icons/text (Shift toggles), rotate (Shift = 15°), nudge, group/ungroup (double-click to enter), z-order, lock, duplicate, align & distribute, undo/redo (slider and colour-picker drags count as one step).
 - **Layers panel**: every object top-most first, with show/hide, lock, rename (double-click) and drag-to-reorder or drop into a group.
 - **Shapes**: rectangles and ellipses with fill, stroke, dash and corner radius.
 - **Connectors**: straight, curved (drag the ◆ handle) or elbow; attach to shapes/text/icons and follow them when moved (⌥ to place freely); arrow, open arrow, inhibition (⊣), dot and diamond ends.
 - **Brushes (B)**: draw freehand and get a lipid bilayer, lipid monolayer, DNA double helix or bead filament along the path. Closing the loop makes a cell membrane. Reshape by dragging points, add points from the ○ midpoints, ⌥-click to delete; recolour heads/tails, strands and bases; "Make oval". Any icon can also be repeated along a path ("Repeat along a path").
+- **Templates**: a gallery of starter figures (cell signalling, membrane transport, activation/inhibition, graphical abstract) built from Pucklet's own shapes and brushes, plus **My templates**: select anything and save it for reuse (stored on your computer).
+- **Smart protocol & timeline builders**: type one step or event per line ("Day 7: Start treatment") and Pucklet lays out numbered markers, labels and connected arrows. Change the steps, direction (across/down), numbering or colour at any time from the right panel and the group rebuilds itself.
 - **Multi-panel figures**: one-click layouts (2, 3, 2×2, 3×2, large + small…) with panel letters in A / a / (a) / A. / a) style, plus "Re-letter panels" to renumber in reading order after you rearrange.
 - **Text**: rich text with bold/italic/underline/colour, super/subscript (⇧⌘= / ⌘=), Greek & symbol palette, alignment and line height.
 - **Icons**: searchable library, filter by library and category, drag or click to place, recolour per colour layer, flip, "select all copies".
@@ -56,7 +59,7 @@ src/renderer/src/
   render/Figure.tsx  The one renderer, used for both the canvas and export
   canvas/            Interaction: tools, selection handles, text editor, viewport
   assets/svg.ts      SVG sanitizing/normalizing (DOMPurify), recolouring, raster import
-  library/           Icon packs: loading, placing, importing files
+  library/           Icon packs (loading, placing, importing files) and templates
   export/            SVG/PNG export, PNG DPI tagging, credit lines
   platform/          Electron vs browser adapters (open/save/export/menus)
   ui/                Panels, toolbar, controls, export dialog
@@ -89,11 +92,11 @@ research/            BioRender feature, UX and community research
 
 ## Known gaps / next steps
 
-- **Icon pack size.** The pack is ~170 MB unminified. Run SVGO on ingest and add more libraries: Servier, NIH BioArt, Reactome, PhyloPic.
-- **Not built yet.** Membrane/DNA "brushes" (pattern along a path), templates, multi-panel layouts with A/B/C labels, PPTX export.
-- **Not built yet.** Layers panel, and resize snapping.
-- **Undo granularity.** The opacity slider records an undo step for every change.
-- **Packaging.** Not yet done: signing/notarisation for macOS, an app icon, auto-update.
+- **Icons**: the Bioicons pack is ~105 MB after SVGO (much of it detailed Servier artwork). More libraries to add: Servier (direct), NIH BioArt, Reactome, PhyloPic. AI-assisted or paper-sourced icons are on the back burner.
+- **More templates**: e.g. immune cell interactions, CRISPR workflow, organ-level figures. They're easy to add in `src/renderer/src/library/templates.ts`.
+- **Editing polish**: editing rotated text in place, brush colour presets.
+- **Packaging**: the Mac app is unsigned, so macOS warns on first launch (right-click the app → Open). Signing/notarisation needs an Apple Developer ID ($99/year); Windows signing needs a code-signing certificate. Auto-update is not set up.
+- **PowerPoint export**: elbow/curved connectors and inhibition (⊣) ends export as pictures rather than native lines.
 
 ## Licence
 

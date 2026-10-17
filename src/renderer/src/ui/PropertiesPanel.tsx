@@ -7,7 +7,8 @@ import { center } from '../model/geometry'
 import type { AlignMode } from '../model/ops'
 import { align, distribute } from '../model/ops'
 import { withTextSize } from '../model/transform'
-import type { BoxObj, BrushKind, BrushObj, Cap, Dash, FigObject, IconObj, Id, LineObj, TextObj } from '../model/types'
+import type { BoxObj, BrushKind, BrushObj, Cap, Dash, FigObject, GroupObj, IconObj, Id, LineObj, SmartSpec, TextObj } from '../model/types'
+import { regenerate } from '../model/smart'
 import { BRUSH_PRESETS, circlePoints, presetFor } from '../model/brush'
 import { makeBrush } from '../model/defaults'
 import { rectOfPoints } from '../model/geometry'
@@ -392,6 +393,60 @@ function BrushFields({ brushes }: { brushes: BrushObj[] }) {
   )
 }
 
+function SmartFields({ group }: { group: GroupObj }) {
+  const spec = group.smart!
+  const doc = useEditor((s) => s.doc)
+  const set = (patch: Partial<SmartSpec>) => regenerate(doc, group.id, { ...spec, ...patch })
+  const isTimeline = spec.kind === 'timeline'
+  return (
+    <Section title={isTimeline ? 'Timeline' : 'Protocol steps'}>
+      <textarea
+        className="smart-items"
+        rows={Math.min(12, Math.max(4, spec.items.length + 1))}
+        defaultValue={spec.items.join('\n')}
+        key={group.id}
+        spellCheck
+        onFocus={() => doc.beginGesture()}
+        onBlur={() => doc.endGesture()}
+        onChange={(e) => set({ items: e.target.value.split('\n') })}
+      />
+      <p className="muted small">
+        One {isTimeline ? 'event' : 'step'} per line. Use “{isTimeline ? 'Day 3: Inject' : 'Title: detail'}” to add a {isTimeline ? 'time' : 'second line'}.
+      </p>
+      <Row label="Layout">
+        <Segmented
+          value={spec.direction}
+          options={[
+            { value: 'horizontal', label: 'Across' },
+            { value: 'vertical', label: 'Down' }
+          ]}
+          // Steps stacked downwards need less room than steps side by side.
+          onChange={(direction) => set({ direction, spacing: direction === 'vertical' ? (isTimeline ? 90 : 80) : isTimeline ? 200 : 170 })}
+        />
+      </Row>
+      {!isTimeline && (
+        <Row label="Numbers">
+          <Segmented
+            value={spec.numbering}
+            options={[
+              { value: '1', label: '1 2 3' },
+              { value: 'i', label: 'i ii' },
+              { value: 'a', label: 'a b' },
+              { value: 'none', label: 'None' }
+            ]}
+            onChange={(numbering) => set({ numbering })}
+          />
+        </Row>
+      )}
+      <Row label="Colour">
+        <ColorField value={spec.color} onChange={(color) => set({ color })} />
+        <NumberField title="Spacing" value={spec.spacing} min={60} max={600} step={10} onChange={(spacing) => set({ spacing })} />
+      </Row>
+      <p className="muted small">Edits here rebuild the {isTimeline ? 'timeline' : 'steps'}; manual changes inside the group are replaced.</p>
+    </Section>
+  )
+}
+
 function LineFields({ lines }: { lines: LineObj[] }) {
   const ids = lines.map((l) => l.id)
   return (
@@ -585,6 +640,7 @@ export function PropertiesPanel() {
       {!locked && (
         <>
           <ArrangeFields ids={ids} snap={live} />
+          {single?.type === 'group' && single.smart && <SmartFields group={single} />}
           {single && isBoxObj(single) && <GeometryFields o={single} />}
           {shapes.length > 0 && (
             <Section title={shapes.length === objs.length ? 'Style' : 'Shape style'}>

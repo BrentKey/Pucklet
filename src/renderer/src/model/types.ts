@@ -123,8 +123,20 @@ export interface BrushObj extends BaseObj {
   assetId?: string
 }
 
+/** Settings a "smart" group is generated from (see model/smart.ts). */
+export interface SmartSpec {
+  kind: 'protocol' | 'timeline'
+  /** One entry per step/event; "Day 3: Inject" splits into a time and a label. */
+  items: string[]
+  direction: 'horizontal' | 'vertical'
+  numbering: '1' | 'i' | 'a' | 'A' | 'none'
+  color: Color
+  spacing: number
+}
+
 export interface GroupObj extends BaseObj {
   type: 'group'
+  smart?: SmartSpec
 }
 
 export type BoxObj = RectObj | EllipseObj | TextObj | IconObj

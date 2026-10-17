@@ -3,6 +3,7 @@
   "productName": "Pucklet",
   "version": "0.1.0",
   "description": "Open-source desktop app for making clean scientific figures.",
+  "author": "Brent",
   "license": "MPL-2.0",
   "private": true,
   "type": "module",
@@ -15,9 +16,10 @@
     "web:build": "vite build --config vite.web.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:mac": "electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
     "dist:win": "electron-vite build && electron-builder --win",
-    "icons": "node scripts/icons-bioicons.mjs"
+    "icons": "node scripts/icons-bioicons.mjs",
+    "icon": "electron scripts/render-icon.cjs"
   },
   "build": {
     "appId": "org.pucklet.app",
@@ -33,10 +35,26 @@
       }
     ],
     "mac": {
-      "category": "public.app-category.graphics-design"
+      "category": "public.app-category.graphics-design",
+      "target": [
+        "dmg"
+      ]
     },
     "win": {
       "target": "nsis"
+    },
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "icon": "build/icon.png",
+    "copyright": "Copyright \u00a9 2026 Brent",
+    "dmg": {
+      "title": "Pucklet"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   },
   "dependencies": {
@@ -61,5 +79,6 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
-  }
+  },
+  "homepage": "https://github.com/BrentKey/Pucklet"
 }

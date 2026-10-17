@@ -19,7 +19,7 @@ import { fitView, zoomAt } from './view'
 type Drag =
   | { kind: 'pan'; client: Pt; pan: Pt }
   | { kind: 'move'; origin: Pt; ids: Id[]; base: Snapshot; bounds: Rect; xs: number[]; ys: number[]; moved: boolean; clickSelect?: Id }
-  | { kind: 'resize'; handle: Handle; ids: Id[]; base: Snapshot; bounds: Rect }
+  | { kind: 'resize'; handle: Handle; ids: Id[]; base: Snapshot; bounds: Rect; xs: number[]; ys: number[] }
   | { kind: 'rotate'; ids: Id[]; base: Snapshot; pivot: Pt; a0: number }
   | { kind: 'marquee'; origin: Pt; base: Id[] }
   | { kind: 'create'; obj: FigObject; origin: Pt }
@@ -33,6 +33,27 @@ const FILTERS = {
   protanopia: '0.152286 1.052583 -0.204868 0 0  0.114503 0.786281 0.099216 0 0  -0.003882 -0.048116 1.051998 0 0  0 0 0 1 0',
   deuteranopia: '0.367322 0.860646 -0.227968 0 0  0.280085 0.672501 0.047413 0 0  -0.011820 0.042940 0.968881 0 0  0 0 0 1 0',
   tritanopia: '1.255528 -0.076749 -0.178779 0 0  -0.078411 0.930809 0.147602 0 0  0.004733 0.691367 0.303900 0 0  0 0 0 1 0'
+}
+
+/** Edges and centres that moving or resizing objects snap to: the artboard plus every other object in the current group. */
+function snapTargets(snap: Snapshot, context: Id | '', exclude: Id[], W: number, H: number): { xs: number[]; ys: number[] } {
+  const skip = new Set([...exclude, ...snap.descendants(exclude)])
+  const xs = [0, W / 2, W]
+  const ys = [0, H / 2, H]
+  for (const o of snap.children(context)) {
+    if (skip.has(o.id) || o.hidden) continue
+    const r = objectBounds(o, snap)
+    if (!r) continue
+    xs.push(r.x, r.x + r.w / 2, r.x + r.w)
+    ys.push(r.y, r.y + r.h / 2, r.y + r.h)
+  }
+  return { xs, ys }
+}
+
+function nearest(v: number, cands: number[], tol: number): number | null {
+  let best: number | null = null
+  for (const c of cands) if (Math.abs(c - v) < tol && (best === null || Math.abs(c - v) < Math.abs(best - v))) best = c
+  return best
 }
 
 /** Topmost bindable object under p (connectors attach to shapes, text and icons). */
@@ -185,7 +206,7 @@ export function Canvas() {
         drag.current = { kind: 'brush-point', brush, index }
         s.set({ drafts: new Map([[brush.id, brush]]) })
       } else {
-        drag.current = { kind: 'resize', handle: handle as Handle, ids, base, bounds: boundsOf(base, ids)! }
+        drag.current = { kind: 'resize', handle: handle as Handle, ids, base, bounds: boundsOf(base, ids)!, ...snapTargets(base, s.context, ids, W, H) }
       }
       return
     }
@@ -244,16 +265,7 @@ export function Canvas() {
         ids = pasteClip(s.doc, copyObjects(base, ids), s.context, 0, 0)
         s.select(ids)
       }
-      const moving = new Set([...ids, ...base.descendants(ids)])
-      const xs = [0, W / 2, W]
-      const ys = [0, H / 2, H]
-      for (const o of base.children(s.context)) {
-        if (moving.has(o.id)) continue
-        const r = objectBounds(o, base)
-        if (!r) continue
-        xs.push(r.x, r.x + r.w / 2, r.x + r.w)
-        ys.push(r.y, r.y + r.h / 2, r.y + r.h)
-      }
+      const { xs, ys } = snapTargets(base, s.context, ids, W, H)
       const snapBase = e.altKey ? s.doc.snapshot() : base
       drag.current = { kind: 'move', origin: p, ids, base: snapBase, bounds: boundsOf(snapBase, ids)!, xs, ys, moved: false, clickSelect }
     } else {
@@ -306,6 +318,21 @@ export function Canvas() {
 
       case 'resize': {
         const single = d.ids.length === 1 ? d.base.get(d.ids[0]) : undefined
+        // Snap the dragged edge(s) to nearby guides (only meaningful for unrotated boxes).
+        const guides = { x: [] as number[], y: [] as number[] }
+        const unrotated = !(single && isBoxObj(single) && single.rotation)
+        if (unrotated && !e.metaKey && !e.ctrlKey) {
+          const tol = SNAP_PX / zoom
+          if (d.handle.includes('e') || d.handle.includes('w')) {
+            const gx = nearest(p.x, d.xs, tol)
+            if (gx !== null) guides.x.push((p.x = gx))
+          }
+          if (d.handle.includes('n') || d.handle.includes('s')) {
+            const gy = nearest(p.y, d.ys, tol)
+            if (gy !== null) guides.y.push((p.y = gy))
+          }
+        }
+        s.set({ guides })
         if (single && isBoxObj(single)) {
           const proportional = single.type === 'icon' || single.type === 'text' ? !e.shiftKey : e.shiftKey
           let r = resizeBox(single, d.handle, p, proportional || single.type === 'text')

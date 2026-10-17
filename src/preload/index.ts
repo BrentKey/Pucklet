@@ -9,6 +9,8 @@ const api = {
   importFiles: () => ipcRenderer.invoke('file:import'),
   exportFile: (args: { suggestedName: string; data: Uint8Array }) => ipcRenderer.invoke('file:export', args),
   svgToPdf: (args: { svg: string; widthIn: number; heightIn: number }) => ipcRenderer.invoke('export:pdf', args),
+  readUserData: (name: string) => ipcRenderer.invoke('userdata:read', name),
+  writeUserData: (name: string, text: string) => ipcRenderer.invoke('userdata:write', name, text),
   setTitle: (title: string) => ipcRenderer.invoke('window:set-title', title),
   confirmClose: () => ipcRenderer.invoke('app:confirm-close'),
   onMenuCommand: (cb: (id: string) => void) => {

@@ -17,6 +17,9 @@ export interface Platform {
   exportFile(data: Uint8Array, suggestedName: string): Promise<boolean>
   /** Vector PDF from a standalone SVG string, or null when unsupported. */
   svgToPdf?(svg: string, widthIn: number, heightIn: number): Promise<Uint8Array>
+  /** Small per-user JSON documents (templates, preferences). */
+  readUserData(name: string): Promise<string | null>
+  writeUserData(name: string, text: string): Promise<void>
   setTitle(title: string): void
   onMenuCommand(cb: (id: string) => void): () => void
   onRequestClose(cb: () => void): () => void
@@ -29,6 +32,8 @@ interface NativeApi {
   importFiles(): Promise<OpenedFile[]>
   exportFile(args: { suggestedName: string; data: Uint8Array }): Promise<{ name: string; path: string } | null>
   svgToPdf(args: { svg: string; widthIn: number; heightIn: number }): Promise<Uint8Array>
+  readUserData(name: string): Promise<string | null>
+  writeUserData(name: string, text: string): Promise<void>
   setTitle(title: string): Promise<void>
   confirmClose(): Promise<void>
   onMenuCommand(cb: (id: string) => void): () => void
@@ -49,6 +54,8 @@ function electronPlatform(n: NativeApi): Platform {
     importFiles: () => n.importFiles(),
     exportFile: async (data, suggestedName) => (await n.exportFile({ data, suggestedName })) !== null,
     svgToPdf: (svg, widthIn, heightIn) => n.svgToPdf({ svg, widthIn, heightIn }),
+    readUserData: (name) => n.readUserData(name),
+    writeUserData: (name, text) => n.writeUserData(name, text),
     setTitle: (t) => void n.setTitle(t),
     onMenuCommand: (cb) => n.onMenuCommand(cb),
     onRequestClose: (cb) => n.onRequestClose(cb),
@@ -92,6 +99,20 @@ function webPlatform(): Platform {
     exportFile: async (data, name) => {
       download(data, name)
       return true
+    },
+    readUserData: async (name) => {
+      try {
+        return localStorage.getItem('pucklet:' + name)
+      } catch {
+        return null
+      }
+    },
+    writeUserData: async (name, text) => {
+      try {
+        localStorage.setItem('pucklet:' + name, text)
+      } catch {
+        throw new Error('This browser is not allowing Pucklet to store data.')
+      }
     },
     setTitle: (t) => {
       document.title = t

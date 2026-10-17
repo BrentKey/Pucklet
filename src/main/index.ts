@@ -179,6 +179,22 @@ function registerIpc(): void {
   // Vector PDF: render the exported SVG in a hidden window and use Chromium's printer.
   ipcMain.handle('export:pdf', (_e, args: { svg: string; widthIn: number; heightIn: number }) => svgToPdf(args))
 
+  // Small JSON stores (user templates, preferences) in the per-user app data folder.
+  const dataFile = (name: string) => {
+    if (!/^[a-z0-9-]{1,40}$/.test(name)) throw new Error('Invalid data name')
+    return join(app.getPath('userData'), `${name}.json`)
+  }
+  ipcMain.handle('userdata:read', async (_e, name: string) => {
+    try {
+      return await readFile(dataFile(name), 'utf8')
+    } catch {
+      return null
+    }
+  })
+  ipcMain.handle('userdata:write', async (_e, name: string, text: string) => {
+    await writeFile(dataFile(name), text, 'utf8')
+  })
+
   ipcMain.handle('window:set-title', (e, title: string) => {
     BrowserWindow.fromWebContents(e.sender)?.setTitle(title)
   })

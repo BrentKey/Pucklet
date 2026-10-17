@@ -214,3 +214,42 @@ describe('brushes', () => {
     expect(back.objects[0]).toEqual(b)
   })
 })
+
+describe('smart groups', () => {
+  it('generates protocol steps with bound arrows and regenerates in place', async () => {
+    const { insertSmart, regenerate, DEFAULT_PROTOCOL, stepNumber } = await import('./smart')
+    const { objectBounds } = await import('./geometry')
+    const doc = new FigureDoc()
+    const gid = insertSmart(doc, DEFAULT_PROTOCOL, 100, 50, '')
+    const kids = () => doc.snapshot().children(gid)
+    const lines = () => kids().filter((o): o is LineObj => o.type === 'line')
+    expect(kids().filter((o) => o.type === 'ellipse')).toHaveLength(5)
+    expect(lines()).toHaveLength(4)
+    expect(lines().every((l) => l.start.bind && l.end.bind)).toBe(true)
+    const before = objectBounds(doc.snapshot().get(gid)!, doc.snapshot())!
+
+    regenerate(doc, gid, { ...DEFAULT_PROTOCOL, items: [...DEFAULT_PROTOCOL.items, 'Quantify'] })
+    expect(kids().filter((o) => o.type === 'ellipse')).toHaveLength(6)
+    const after = objectBounds(doc.snapshot().get(gid)!, doc.snapshot())!
+    expect(after.x).toBeCloseTo(before.x)
+    expect(after.y).toBeCloseTo(before.y)
+    expect(stepNumber(3, 'i')).toBe('iv')
+
+    doc.undo()
+    expect(kids().filter((o) => o.type === 'ellipse')).toHaveLength(5)
+  })
+
+  it('builds every built-in template', async () => {
+    const { BUILTIN_TEMPLATES } = await import('../library/templates')
+    for (const t of BUILTIN_TEMPLATES) {
+      const clip = t.build()
+      expect(clip.objects.length, t.id).toBeGreaterThan(0)
+      const doc = new FigureDoc({ meta: { width: 100, height: 100, background: '#ffffff' }, objects: clip.objects, assets: clip.assets })
+      // Every connector binds to something that exists in the template.
+      for (const o of doc.snapshot().objects.values()) {
+        if (o.type !== 'line') continue
+        for (const end of [o.start, o.end]) if (end.bind) expect(doc.snapshot().get(end.bind), t.id).toBeDefined()
+      }
+    }
+  })
+})

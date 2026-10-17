@@ -5,7 +5,7 @@ import type { BrushKind, Cap, FigObject, Id, Route } from '../model/types'
 
 export type Tool = 'select' | 'hand' | 'rect' | 'ellipse' | 'text' | 'line' | 'arrow' | 'brush'
 export type ViewFilter = 'none' | 'grayscale' | 'protanopia' | 'deuteranopia' | 'tritanopia'
-export type LeftPanel = 'library' | 'uploads' | 'layers'
+export type LeftPanel = 'library' | 'templates' | 'uploads' | 'layers'
 
 export interface View {
   zoom: number

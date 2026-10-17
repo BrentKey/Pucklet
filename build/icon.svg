@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <radialGradient id="cyto" cx="0.45" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#fff7e6"/>
+      <stop offset="1" stop-color="#fde3b5"/>
+    </radialGradient>
+  </defs>
+  <!-- macOS-style rounded square with margin -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <!-- cell: cytoplasm + lipid bilayer ring (heads as dashes) -->
+  <circle cx="512" cy="512" r="290" fill="url(#cyto)"/>
+  <circle cx="512" cy="512" r="300" fill="none" stroke="#f59e0b" stroke-width="34" stroke-dasharray="26 15" stroke-linecap="round"/>
+  <circle cx="512" cy="512" r="262" fill="none" stroke="#f59e0b" stroke-width="30" stroke-dasharray="22 14" stroke-linecap="round"/>
+  <!-- nucleus -->
+  <circle cx="470" cy="540" r="112" fill="#1d4ed8"/>
+  <circle cx="440" cy="505" r="34" fill="#93c5fd" opacity="0.85"/>
+  <!-- vesicle -->
+  <circle cx="630" cy="400" r="46" fill="#10b981"/>
+</svg>

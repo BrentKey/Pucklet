@@ -7,6 +7,7 @@ import type { Asset } from '../model/types'
 import { useEditor, useSnapshot } from '../state/editor'
 import { Icon } from './icons'
 import { LayersPanel } from './LayersPanel'
+import { TemplatesPanel } from './TemplatesPanel'
 
 interface PackIndex {
   packs: { id: string; name: string; manifest: string }[]
@@ -169,17 +170,24 @@ export function LeftPanel() {
   return (
     <aside className="left-panel">
       <div className="tabs">
-        <button className={panel === 'library' ? 'on' : ''} onClick={() => set({ leftPanel: 'library' })}>
-          <Icon.library /> Icons
-        </button>
-        <button className={panel === 'uploads' ? 'on' : ''} onClick={() => set({ leftPanel: 'uploads' })}>
-          <Icon.upload /> Uploads
-        </button>
-        <button className={panel === 'layers' ? 'on' : ''} onClick={() => set({ leftPanel: 'layers' })}>
-          <Icon.layers /> Layers
-        </button>
+        {(
+          [
+            ['library', 'Icons', <Icon.library key="i" />],
+            ['templates', 'Templates', <Icon.template key="t" />],
+            ['uploads', 'Uploads', <Icon.upload key="u" />],
+            ['layers', 'Layers', <Icon.layers key="l" />]
+          ] as const
+        ).map(([id, label, icon]) => (
+          <button key={id} className={panel === id ? 'on' : ''} onClick={() => set({ leftPanel: id })} title={label}>
+            {icon}
+            <span>{label}</span>
+          </button>
+        ))}
       </div>
-      {panel === 'library' ? <Library /> : panel === 'uploads' ? <Uploads /> : <LayersPanel />}
+      {panel === 'library' && <Library />}
+      {panel === 'templates' && <TemplatesPanel />}
+      {panel === 'uploads' && <Uploads />}
+      {panel === 'layers' && <LayersPanel />}
     </aside>
   )
 }
