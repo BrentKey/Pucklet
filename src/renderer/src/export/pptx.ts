@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Snapshot } from '../model/doc'
-import { objectBounds, resolveLine } from '../model/geometry'
+import { lineMidpoint, objectBounds, resolveLine } from '../model/geometry'
 import type { Cap, Dash, FigObject, LineObj, TextObj } from '../model/types'
 import { Node } from '../render/Figure'
 import { creditsFor, creditText, svgToPng } from './export'
@@ -92,14 +92,31 @@ function textRuns(t: TextObj) {
 
 const nativeLine = (o: LineObj) => o.route === 'straight' && ARROW[o.startCap] !== undefined && ARROW[o.endCap] !== undefined
 
-export async function figureToPptx(snap: Snapshot, opts: { transparent?: boolean } = {}): Promise<Uint8Array> {
+/**
+ * One slide per page. PowerPoint uses a single slide size per file, so every slide takes the
+ * first page's size; other pages are centred and scaled to fit.
+ */
+export async function figureToPptx(snaps: Snapshot[], opts: { transparent?: boolean } = {}): Promise<Uint8Array> {
   const { default: PptxGenJS } = await import('pptxgenjs')
   const pptx = new PptxGenJS()
-  const { width: W, height: H, background } = snap.meta
+  const { width: W, height: H } = snaps[0].meta
   pptx.defineLayout({ name: 'FIGURE', width: W / IN, height: H / IN })
   pptx.layout = 'FIGURE'
   pptx.title = 'Figure'
   pptx.author = 'Pucklet'
+  for (const snap of snaps) await addSlide(pptx, snap, W, H, opts)
+  return (await pptx.write({ outputType: 'uint8array' })) as Uint8Array
+}
+
+async function addSlide(pptx: InstanceType<typeof import('pptxgenjs').default>, snap: Snapshot, W: number, H: number, opts: { transparent?: boolean }) {
+  const { background } = snap.meta
+  // Fit this page into the slide (identity when sizes match).
+  const k = Math.min(W / snap.meta.width, H / snap.meta.height)
+  const ox = (W - snap.meta.width * k) / 2
+  const oy = (H - snap.meta.height * k) / 2
+  const IN = 96 / k
+  const X = (v: number) => (v + ox / k) / IN
+  const Y = (v: number) => (v + oy / k) / IN
   const slide = pptx.addSlide()
   if (!opts.transparent && background !== 'none') slide.background = { color: hex(background) }
 
@@ -108,28 +125,28 @@ export async function figureToPptx(snap: Snapshot, opts: { transparent?: boolean
     const transparency = Math.round((1 - alpha) * 100)
     if (o.type === 'text') {
       slide.addText(textRuns(o) as never, {
-        x: o.x / IN,
-        y: o.y / IN,
+        x: X(o.x),
+        y: Y(o.y),
         w: (o.w + 4) / IN,
         h: o.h / IN,
         fontFace: o.fontFamily,
-        fontSize: o.fontSize * PT,
+        fontSize: o.fontSize * PT * k,
         color: hex(o.color),
         align: o.align,
         valign: 'top',
         margin: 0,
-        wrap: false,
+        wrap: !!o.wrap,
         lineSpacingMultiple: o.lineHeight,
         rotate: o.rotation || undefined,
         transparency: transparency || undefined
       })
       continue
     }
-    if (o.type === 'rect' || o.type === 'ellipse') {
+    if ((o.type === 'rect' || o.type === 'ellipse') && !o.gradient) {
       const shape = o.type === 'ellipse' ? pptx.ShapeType.ellipse : o.radius > 0 ? pptx.ShapeType.roundRect : pptx.ShapeType.rect
       slide.addShape(shape, {
-        x: o.x / IN,
-        y: o.y / IN,
+        x: X(o.x),
+        y: Y(o.y),
         w: o.w / IN,
         h: o.h / IN,
         rotate: o.rotation || undefined,
@@ -137,7 +154,7 @@ export async function figureToPptx(snap: Snapshot, opts: { transparent?: boolean
         line:
           o.stroke === 'none' || o.strokeWidth <= 0
             ? { type: 'none' }
-            : { color: hex(o.stroke), width: o.strokeWidth * PT, dashType: DASH[o.dash], transparency: transparency || undefined },
+            : { color: hex(o.stroke), width: o.strokeWidth * PT * k, dashType: DASH[o.dash], transparency: transparency || undefined },
         rectRadius: o.type === 'rect' && o.radius > 0 ? Math.min(1, o.radius / (Math.min(o.w, o.h) / 2)) : undefined
       } as never)
       continue
@@ -147,28 +164,45 @@ export async function figureToPptx(snap: Snapshot, opts: { transparent?: boolean
       const dx = g.p2.x - g.p1.x
       const dy = g.p2.y - g.p1.y
       slide.addShape(pptx.ShapeType.line, {
-        x: Math.min(g.p1.x, g.p2.x) / IN,
-        y: Math.min(g.p1.y, g.p2.y) / IN,
+        x: X(Math.min(g.p1.x, g.p2.x)),
+        y: Y(Math.min(g.p1.y, g.p2.y)),
         w: Math.max(Math.abs(dx), 0.01) / IN,
         h: Math.max(Math.abs(dy), 0.01) / IN,
         flipH: dx < 0,
         flipV: dy < 0,
         line: {
           color: hex(o.stroke === 'none' ? '#000000' : o.stroke),
-          width: o.strokeWidth * PT,
+          width: o.strokeWidth * PT * k,
           dashType: DASH[o.dash],
           beginArrowType: ARROW[o.startCap],
           endArrowType: ARROW[o.endCap],
           transparency: transparency || undefined
         }
       } as never)
+      if (o.label?.trim()) {
+        const m = lineMidpoint(g)
+        const size = o.labelSize ?? 14
+        const w = Math.max(40, o.label.length * size * 0.6)
+        slide.addText(o.label, {
+          x: X(m.x - w / 2),
+          y: Y(m.y - size),
+          w: w / IN,
+          h: (size * 2) / IN,
+          fontFace: 'Arial',
+          fontSize: size * PT * k,
+          color: hex(o.stroke === 'none' ? '#333333' : o.stroke),
+          align: 'center',
+          valign: 'middle',
+          margin: 0,
+          fill: { color: hex(background === 'none' ? '#ffffff' : background) }
+        } as never)
+      }
       continue
     }
     const pic = await objectPicture(o, snap)
-    if (pic) slide.addImage({ data: pic.data, x: pic.x / IN, y: pic.y / IN, w: pic.w / IN, h: pic.h / IN, transparency: transparency || undefined } as never)
+    if (pic) slide.addImage({ data: pic.data, x: X(pic.x), y: Y(pic.y), w: pic.w / IN, h: pic.h / IN, transparency: transparency || undefined } as never)
   }
 
   const credits = creditText(creditsFor(snap))
   if (credits) slide.addNotes(credits)
-  return (await pptx.write({ outputType: 'uint8array' })) as Uint8Array
 }

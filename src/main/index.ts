@@ -120,13 +120,18 @@ function buildMenu(): void {
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+1', click: cmd('view.actual') },
         { type: 'separator' },
         { label: 'Grayscale Preview', accelerator: 'Alt+G', click: cmd('view.grayscale') },
+        // Shift+R is handled by the canvas (a menu accelerator would swallow capital R in text fields).
+        { label: 'Show/Hide Rulers    ⇧R', click: cmd('view.rulers') },
+        { label: 'Show/Hide Grid', accelerator: "CmdOrCtrl+'", click: cmd('view.grid') },
+        { label: 'Snap to Grid', click: cmd('view.snapGrid') },
         { type: 'separator' },
         { role: 'reload' },
         { role: 'toggleDevTools' },
         { role: 'togglefullscreen' }
       ]
     },
-    { role: 'windowMenu' }
+    { role: 'windowMenu' },
+    { role: 'help', submenu: [{ label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: cmd('help.shortcuts') }] }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
@@ -177,7 +182,7 @@ function registerIpc(): void {
   })
 
   // Vector PDF: render the exported SVG in a hidden window and use Chromium's printer.
-  ipcMain.handle('export:pdf', (_e, args: { svg: string; widthIn: number; heightIn: number }) => svgToPdf(args))
+  ipcMain.handle('export:pdf', (_e, pages: PdfPage[]) => svgToPdf(pages))
 
   // Small JSON stores (user templates, preferences) in the per-user app data folder.
   const dataFile = (name: string) => {
@@ -200,23 +205,36 @@ function registerIpc(): void {
   })
 }
 
-async function svgToPdf(args: { svg: string; widthIn: number; heightIn: number }): Promise<Uint8Array> {
+interface PdfPage {
+  svg: string
+  widthIn: number
+  heightIn: number
+}
+
+/** Vector PDF with one page per SVG, each page sized to its figure (Chromium named pages). */
+async function svgToPdf(pages: PdfPage[]): Promise<Uint8Array> {
   const pdfWin = new BrowserWindow({
     show: false,
     webPreferences: { sandbox: true, contextIsolation: true, javascript: false }
   })
   try {
+    const css = pages
+      .map((p, i) => `@page p${i}{size:${p.widthIn}in ${p.heightIn}in;margin:0}.p${i}{page:p${i};width:${p.widthIn}in;height:${p.heightIn}in}`)
+      .join('')
+    const body = pages
+      .map((p, i) => `<div class="pg p${i}">${p.svg.replace(/^<\?xml[^>]*>\s*/, '')}</div>`)
+      .join('')
     const html =
       '<!doctype html><html><head><meta charset="utf-8"><style>' +
-      `@page{size:${args.widthIn}in ${args.heightIn}in;margin:0}` +
-      'html,body{margin:0;padding:0;overflow:hidden;height:100%}svg{display:block;width:100vw;height:100vh}' +
+      'html,body{margin:0;padding:0}.pg{overflow:hidden;break-after:page}.pg:last-child{break-after:auto}.pg svg{display:block;width:100%;height:100%}' +
+      css +
       '</style></head><body>' +
-      args.svg.replace(/^<\?xml[^>]*>\s*/, '') +
+      body +
       '</body></html>'
     await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
     const pdf = await pdfWin.webContents.printToPDF({
       printBackground: true,
-      pageSize: { width: args.widthIn, height: args.heightIn },
+      preferCSSPageSize: true,
       margins: { top: 0, bottom: 0, left: 0, right: 0 }
     })
     return new Uint8Array(pdf)
@@ -253,7 +271,10 @@ async function smokeTest(win: BrowserWindow, dir: string): Promise<void> {
   const shot = await win.webContents.capturePage()
   await writeFile(join(dir, 'smoke-window.png'), shot.toPNG())
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="10" width="80" height="80" fill="#0072b2"/><text x="100" y="60" font-family="Arial" font-size="20">Ca<tspan dy="-8" font-size="14">2+</tspan></text></svg>'
-  const pdf = await svgToPdf({ svg, widthIn: 200 / 96, heightIn: 100 / 96 })
+  const pdf = await svgToPdf([
+    { svg, widthIn: 200 / 96, heightIn: 100 / 96 },
+    { svg, widthIn: 400 / 96, heightIn: 300 / 96 }
+  ])
   await writeFile(join(dir, 'smoke.pdf'), pdf)
   await writeFile(join(dir, 'smoke-report.json'), JSON.stringify({ ...report, pdfBytes: pdf.length }, null, 2))
   app.exit(0)

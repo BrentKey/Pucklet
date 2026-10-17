@@ -4,8 +4,8 @@ import { processSvg, resanitizeAsset } from '../assets/svg'
 import { isTyping } from '../canvas/Canvas'
 import { fitView, setZoom, zoomAt } from '../canvas/view'
 import { makeText } from '../model/defaults'
-import { FigureDoc } from '../model/doc'
-import { deserialize, serialize, validObject } from '../model/file'
+import { FigureDoc, newId } from '../model/doc'
+import { deserializePages, serializePages, validObject } from '../model/file'
 import type { Clip } from '../model/ops'
 import { boundsOf, copyObjects, deleteObjects, groupObjects, pasteClip, reorder, setLocked, ungroupObjects } from '../model/ops'
 import { translate } from '../model/transform'
@@ -15,12 +15,13 @@ import { platform } from '../platform'
 import { Node } from '../render/Figure'
 import { importFiles, placeAsset, viewportCenter } from '../library/place'
 import type { Tool } from '../state/editor'
-import { useEditor } from '../state/editor'
+import { contentSignature, useEditor } from '../state/editor'
 import { linesFromPlain } from '../text/layout'
+import { setPrefs } from './prefs'
 import { withTextSize } from '../model/transform'
 
 const S = () => useEditor.getState()
-const isDirty = () => S().doc.version !== S().savedVersion
+const isDirty = () => contentSignature(S()) !== S().savedSig
 
 function confirmDiscard(): boolean {
   return !isDirty() || window.confirm('You have unsaved changes. Discard them?')
@@ -31,7 +32,7 @@ function confirmDiscard(): boolean {
 
 export function newFigure(): void {
   if (!confirmDiscard()) return
-  S().loadDoc(new FigureDoc(), 'Untitled.pucklet')
+  S().loadPages([{ id: newId(), name: 'Page 1', doc: new FigureDoc() }], 'Untitled.pucklet')
 }
 
 export async function openFigure(): Promise<void> {
@@ -39,16 +40,18 @@ export async function openFigure(): Promise<void> {
   const f = await platform.openFile()
   if (!f) return
   try {
-    const data = deserialize(f.data)
-    const assets = []
-    for (const a of data.assets) {
-      try {
-        assets.push(resanitizeAsset(a))
-      } catch {
-        /* drop assets that fail validation; their icons render as placeholders */
+    const pages = deserializePages(f.data).map((p) => {
+      const assets = []
+      for (const a of p.data.assets) {
+        try {
+          assets.push(resanitizeAsset(a))
+        } catch {
+          /* drop assets that fail validation; their icons render as placeholders */
+        }
       }
-    }
-    S().loadDoc(new FigureDoc({ ...data, assets }), f.name, f.path)
+      return { id: p.id, name: p.name, doc: new FigureDoc({ ...p.data, assets }) }
+    })
+    S().loadPages(pages, f.name, f.path)
   } catch (e) {
     window.alert(`Couldn't open ${f.name}: ${(e as Error).message}`)
   }
@@ -57,7 +60,7 @@ export async function openFigure(): Promise<void> {
 export async function saveFigure(saveAs = false): Promise<boolean> {
   const s = S()
   if (s.editingText) (document.activeElement as HTMLElement | null)?.blur()
-  const bytes = serialize(S().doc.toData())
+  const bytes = serializePages(S().pages.map((p) => ({ id: p.id, name: p.name, data: p.doc.toData() })))
   const res = await platform.saveFile(bytes, s.fileName.endsWith('.pucklet') ? s.fileName : s.fileName + '.pucklet', saveAs ? undefined : s.filePath)
   if (!res) return false
   S().markSaved(res.name, res.path)
@@ -141,6 +144,7 @@ export function setTool(tool: Tool): void {
 
 export function escapeKey(): void {
   const s = S()
+  if (s.cropping) return void s.set({ cropping: null })
   if (s.tool !== 'select') return setTool('select')
   if (s.context) {
     s.set({ selection: [s.context], context: '' })
@@ -274,7 +278,11 @@ export const commands: Record<string, () => void> = {
   'view.zoomOut': () => zoomAt(0.8),
   'view.fit': fitView,
   'view.actual': () => setZoom(1),
-  'view.grayscale': () => S().set({ filter: S().filter === 'grayscale' ? 'none' : 'grayscale' })
+  'view.grayscale': () => S().set({ filter: S().filter === 'grayscale' ? 'none' : 'grayscale' }),
+  'view.rulers': () => setPrefs({ showRulers: !S().prefs.showRulers }),
+  'view.grid': () => setPrefs({ showGrid: !S().prefs.showGrid }),
+  'view.snapGrid': () => setPrefs({ snapToGrid: !S().prefs.snapToGrid }),
+  'help.shortcuts': () => S().set({ shortcutsOpen: true })
 }
 
 // In Electron these arrive from the native menu's accelerators; in a browser we bind them here.
@@ -283,7 +291,7 @@ const MOD_KEYS: Record<string, string> = {
   z: 'edit.undo', 'shift+z': 'edit.redo', y: 'edit.redo', d: 'edit.duplicate', a: 'edit.selectAll',
   g: 'arrange.group', 'shift+g': 'arrange.ungroup', ']': 'arrange.forward', '[': 'arrange.backward',
   'shift+]': 'arrange.front', 'shift+[': 'arrange.back', l: 'arrange.lock',
-  '=': 'view.zoomIn', '+': 'view.zoomIn', '-': 'view.zoomOut', '0': 'view.fit', '1': 'view.actual'
+  '=': 'view.zoomIn', '+': 'view.zoomIn', '-': 'view.zoomOut', '0': 'view.fit', '1': 'view.actual', "'": 'view.grid'
 }
 
 const TOOL_KEYS: Record<string, Tool> = { v: 'select', h: 'hand', r: 'rect', o: 'ellipse', e: 'ellipse', t: 'text', l: 'line', a: 'arrow', b: 'brush' }
@@ -309,7 +317,9 @@ export function installKeyboard(): () => void {
       return
     }
     if (isTyping()) return
-    if (key === 'Escape') return escapeKey()
+    if (key === '?') return commands['help.shortcuts']()
+    if (e.shiftKey && key === 'r') return commands['view.rulers']()
+    if (key === 'Escape' || (key === 'Enter' && S().cropping)) return escapeKey()
     if (key === 'Delete' || key === 'Backspace') {
       e.preventDefault()
       return deleteSelection()
@@ -320,7 +330,7 @@ export function installKeyboard(): () => void {
       e.preventDefault()
       return nudge(...arrows[key])
     }
-    if (!e.altKey && TOOL_KEYS[key]) setTool(TOOL_KEYS[key])
+    if (!e.altKey && !e.shiftKey && TOOL_KEYS[key]) setTool(TOOL_KEYS[key])
   }
   window.addEventListener('keydown', onKey)
   return () => window.removeEventListener('keydown', onKey)

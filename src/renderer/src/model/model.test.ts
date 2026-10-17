@@ -4,7 +4,7 @@ import { deserialize, serialize } from './file'
 import { resolveLine } from './geometry'
 import { align, copyObjects, deleteObjects, distribute, groupObjects, pasteClip, reorder, ungroupObjects } from './ops'
 import { resizeBox, rotateAbout, scaleAbout, translate } from './transform'
-import type { FigObject, LineObj, RectObj } from './types'
+import type { FigObject, IconObj, LineObj, RectObj } from './types'
 
 const rect = (id: string, x: number, y: number, z: string, extra: Partial<RectObj> = {}): RectObj => ({
   id, type: 'rect', z, x, y, w: 100, h: 50, rotation: 0, opacity: 1,
@@ -251,5 +251,119 @@ describe('smart groups', () => {
         for (const end of [o.start, o.end]) if (end.bind) expect(doc.snapshot().get(end.bind), t.id).toBeDefined()
       }
     }
+  })
+})
+
+describe('connector attachment rules', () => {
+  it('pins an end to the spot on the outline where it was dropped', async () => {
+    const { bindingFor } = await import('./geometry')
+    const big = rect('big', 0, 0, 'a0', { w: 600, h: 400 })
+    // Inside a large shape, away from the edge: no attachment (lines can be drawn over boxes).
+    expect(bindingFor(big, { x: 300, y: 200 }, 1)).toBeNull()
+    // Near the right edge: pinned there.
+    expect(bindingFor(big, { x: 596, y: 100 }, 1)).toEqual({ anchor: { x: 1, y: 0.25 } })
+    // Inside a small shape: attached to the whole shape.
+    expect(bindingFor(rect('s', 0, 0, 'a1'), { x: 50, y: 25 }, 1)).toEqual({})
+  })
+
+  it('keeps a pinned end still while the other end moves', () => {
+    const doc = docWith([
+      rect('a', 0, 0, 'a0', { w: 600, h: 400 }),
+      line('l', 'a1', { x: 0, y: 0, bind: 'a', anchor: { x: 1, y: 0.5 } }, { x: 800, y: 100 }, { padding: 0 })
+    ])
+    const at = (end: { x: number; y: number }) => {
+      const l = { ...(doc.snapshot().get('l') as LineObj), end }
+      return resolveLine(l, doc.snapshot()).p1
+    }
+    expect(at({ x: 800, y: 100 })).toEqual({ x: 600, y: 200 })
+    expect(at({ x: 900, y: 700 })).toEqual({ x: 600, y: 200 })
+    // ...and follows the shape when the shape moves.
+    doc.transact((tx) => tx.update('a', { x: 50 }))
+    expect(at({ x: 900, y: 700 })).toEqual({ x: 650, y: 200 })
+  })
+
+  it('dragging a connector on its own detaches it from shapes that stay put', () => {
+    const doc = docWith([
+      rect('a', 0, 0, 'a0'),
+      rect('b', 300, 0, 'a1'),
+      line('l', 'a2', { x: 0, y: 0, bind: 'a' }, { x: 0, y: 0, bind: 'b' }, { padding: 0 })
+    ])
+    const moved = translate(doc.snapshot(), ['l'], 0, 50).get('l') as LineObj
+    expect(moved.start).toEqual({ x: 100, y: 75 })
+    expect(moved.end).toEqual({ x: 300, y: 75 })
+    // Moving the shapes together with the connector keeps it attached.
+    const all = translate(doc.snapshot(), ['a', 'b', 'l'], 0, 50).get('l') as LineObj
+    expect(all.start.bind).toBe('a')
+  })
+})
+
+describe('text wrapping', () => {
+  it('breaks lines at spaces within the wrap width, across styled runs', async () => {
+    const { layoutText } = await import('../text/layout')
+    // Without a canvas, each character measures 0.55 × font size: 11 px at 20 px.
+    const t = { lines: [[{ text: 'aaaa bbbb ' }, { text: 'cccc', bold: true }, { text: ' dddd' }]], fontFamily: 'Arial', fontSize: 20, lineHeight: 1.25, align: 'left' as const }
+    expect(layoutText(t).lines).toHaveLength(1)
+    const wrapped = layoutText({ ...t, wrap: 110 })
+    expect(wrapped.width).toBe(110)
+    expect(wrapped.lines.map((l) => l.runs.map((r) => r.text).join(''))).toEqual(['aaaa bbbb', 'cccc dddd'])
+    expect(wrapped.lines[1].runs[0].run.bold).toBe(true)
+    expect(wrapped.height).toBe(50)
+  })
+})
+
+describe('cropping', () => {
+  const icon = (extra: Partial<IconObj> = {}): IconObj => ({
+    id: 'i', type: 'icon', z: 'a0', x: 0, y: 0, w: 200, h: 100, rotation: 0, opacity: 1, assetId: 'x', flipX: false, flipY: false, recolor: {}, ...extra
+  })
+
+  it('crops without rescaling and can pan and reset', async () => {
+    const { cropResize, cropPan, resetCrop, fullImageBox } = await import('./crop')
+    const c1 = cropResize(icon(), 'e', { x: 100, y: 50 })
+    expect(c1).toMatchObject({ x: 0, w: 100, h: 100, crop: { x: 0, y: 0, w: 0.5, h: 1 } })
+    const c2 = cropResize(c1, 'w', { x: 50, y: 50 })
+    expect(c2).toMatchObject({ x: 50, w: 50, crop: { x: 0.25, w: 0.25 } })
+    expect(fullImageBox(c2)).toEqual({ x: 0, y: 0, w: 200, h: 100 })
+    // Panning the image left shows more of its right side; it can't leave the frame.
+    expect(cropPan(c2, -1000, 0).crop).toEqual({ x: 0.75, y: 0, w: 0.25, h: 1 })
+    const back = resetCrop(c2)
+    expect(back).toMatchObject({ x: 0, y: 0, w: 200, h: 100 })
+    expect(back.crop).toBeUndefined()
+  })
+
+  it('crops the visible side of a flipped image', async () => {
+    const { cropResize } = await import('./crop')
+    // Flipped horizontally: the right edge of the box shows the left side of the source.
+    expect(cropResize(icon({ flipX: true }), 'e', { x: 100, y: 50 }).crop).toEqual({ x: 0.5, y: 0, w: 0.5, h: 1 })
+  })
+})
+
+describe('multi-page files', () => {
+  it('round-trips pages with shared assets', async () => {
+    const { serializePages, deserializePages } = await import('./file')
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h10v10z"/></svg>'
+    const asset = { id: 'svg-1', kind: 'svg' as const, name: 'Square', data: svg, width: 10, height: 10 }
+    const icon = (id: string): IconObj => ({ id, type: 'icon', z: 'a0', x: 0, y: 0, w: 10, h: 10, rotation: 0, opacity: 1, assetId: 'svg-1', flipX: false, flipY: false, recolor: {} })
+    const bytes = serializePages([
+      { id: 'p1', name: 'Overview', data: { meta: { width: 800, height: 600, background: '#ffffff' }, objects: [icon('a')], assets: [asset] } },
+      { id: 'p2', name: 'Detail', data: { meta: { width: 400, height: 400, background: 'none' }, objects: [icon('b'), rect('r', 1, 2, 'a1')], assets: [asset] } }
+    ])
+    const pages = deserializePages(bytes)
+    expect(pages.map((p) => [p.id, p.name, p.data.meta.width, p.data.objects.length, p.data.assets.length])).toEqual([
+      ['p1', 'Overview', 800, 1, 1],
+      ['p2', 'Detail', 400, 2, 1]
+    ])
+  })
+
+  it('opens single-page files from the first version of the format', async () => {
+    const { strToU8, zipSync } = await import('fflate')
+    const { deserializePages } = await import('./file')
+    const v1 = zipSync({
+      'document.json': strToU8(JSON.stringify({ format: 'pucklet', schemaVersion: 1, meta: { width: 640, height: 480, background: '#fafafa' }, objects: [rect('a', 0, 0, 'a0')] })),
+      'assets.json': strToU8('[]')
+    })
+    const pages = deserializePages(v1)
+    expect(pages).toHaveLength(1)
+    expect(pages[0]).toMatchObject({ name: 'Page 1', data: { meta: { width: 640 } } })
+    expect(pages[0].data.objects).toHaveLength(1)
   })
 })

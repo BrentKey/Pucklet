@@ -1,4 +1,4 @@
-import type { Box, Cap, FigObject, Id, LineObj } from './types'
+import type { Box, Cap, Endpoint, FigObject, Id, LineObj } from './types'
 import { isBoxObj } from './types'
 import { flattenPath } from './brush'
 
@@ -151,33 +151,111 @@ function capInset(cap: Cap, strokeWidth: number): number {
 
 const f = (n: number): string => String(Math.round(n * 100) / 100)
 
-/** The points a connector aims between: centers of bound targets, or the free endpoint positions. */
-export function lineAnchors(line: LineObj, scene: Lookup): { a: Pt; b: Pt } {
-  const ta = targetOf(line.start.bind, scene)
-  const tb = targetOf(line.end.bind, scene)
-  return {
-    a: ta ? center(ta.box) : { x: line.start.x, y: line.start.y },
-    b: tb ? center(tb.box) : { x: line.end.x, y: line.end.y }
+/** A fixed point on the outline (anchor in 0–1 box coordinates), pushed out by `pad` along the outline's normal. */
+function anchoredPoint(t: Target, an: { x: number; y: number }, pad: number): Pt {
+  const b = t.box
+  const c = center(b)
+  const q = { x: b.x + an.x * b.w, y: b.y + an.y * b.h }
+  let n: Pt
+  if (t.kind === 'ellipse') {
+    const rx = Math.max(b.w / 2, 1e-6)
+    const ry = Math.max(b.h / 2, 1e-6)
+    n = norm({ x: (q.x - c.x) / (rx * rx), y: (q.y - c.y) / (ry * ry) })
+  } else {
+    const edges: [number, Pt][] = [
+      [an.x * b.w, { x: -1, y: 0 }],
+      [(1 - an.x) * b.w, { x: 1, y: 0 }],
+      [an.y * b.h, { x: 0, y: -1 }],
+      [(1 - an.y) * b.h, { x: 0, y: 1 }]
+    ]
+    n = edges.reduce((m, e) => (e[0] < m[0] ? e : m))[1]
   }
+  return rotate(add(q, scale(n, pad)), b.rotation, c)
 }
+
+/** Where an endpoint sits before padding/aiming: anchor point, target centre, or free position. */
+function endBase(e: Endpoint, t: Target | null): Pt {
+  if (!t) return { x: e.x, y: e.y }
+  return e.anchor ? anchoredPoint(t, e.anchor, 0) : center(t.box)
+}
+
+/** The points a connector aims between: anchors or centres of bound targets, or the free endpoint positions. */
+export function lineAnchors(line: LineObj, scene: Lookup): { a: Pt; b: Pt } {
+  return { a: endBase(line.start, targetOf(line.start.bind, scene)), b: endBase(line.end, targetOf(line.end.bind, scene)) }
+}
+
+/**
+ * How an endpoint dropped at `p` should attach to object `o`, or null for "don't attach".
+ * - Near the outline: pinned to that exact spot (anchor).
+ * - Inside a small object (icons, labels, markers): attached to the whole object, aiming at its centre.
+ * - Inside a large shape, away from its edge: not attached, so lines can be drawn on top of boxes and panels.
+ */
+export function bindingFor(o: FigObject, p: Pt, zoom: number): { anchor?: { x: number; y: number } } | null {
+  if (!isBoxObj(o) || o.w <= 0 || o.h <= 0) return null
+  const c = center(o)
+  const q = rotate(p, -o.rotation, c)
+  const tol = 10 / zoom
+  let inside: boolean
+  let edgeDist: number
+  let proj: Pt
+  if (o.type === 'ellipse') {
+    const rx = o.w / 2
+    const ry = o.h / 2
+    const dx = q.x - c.x
+    const dy = q.y - c.y
+    const r = Math.hypot(dx / rx, dy / ry)
+    inside = r <= 1
+    const k = r > 1e-9 ? 1 / r : 0
+    proj = r > 1e-9 ? { x: c.x + dx * k, y: c.y + dy * k } : { x: c.x + rx, y: c.y }
+    edgeDist = dist(q, proj)
+  } else {
+    inside = q.x >= o.x && q.x <= o.x + o.w && q.y >= o.y && q.y <= o.y + o.h
+    if (inside) {
+      const d = [q.x - o.x, o.x + o.w - q.x, q.y - o.y, o.y + o.h - q.y]
+      const m = Math.min(...d)
+      const i = d.indexOf(m)
+      proj = i === 0 ? { x: o.x, y: q.y } : i === 1 ? { x: o.x + o.w, y: q.y } : i === 2 ? { x: q.x, y: o.y } : { x: q.x, y: o.y + o.h }
+      edgeDist = m
+    } else {
+      proj = { x: Math.min(Math.max(q.x, o.x), o.x + o.w), y: Math.min(Math.max(q.y, o.y), o.y + o.h) }
+      edgeDist = dist(q, proj)
+    }
+  }
+  const small = o.w * zoom < 160 && o.h * zoom < 160
+  const anchor = { anchor: { x: round3((proj.x - o.x) / o.w), y: round3((proj.y - o.y) / o.h) } }
+  if (o.type === 'rect' || o.type === 'ellipse') {
+    if (edgeDist <= tol) return anchor
+    return inside && small ? {} : null
+  }
+  // Icons and text have invisible bounding boxes: attach to the whole object when the end is
+  // dropped on a small one, pin to the box edge when approached from outside.
+  if (inside) return small ? {} : null
+  return edgeDist <= tol ? (small ? {} : anchor) : null
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000
 
 export function resolveLine(line: LineObj, scene: Lookup): LineGeom {
   const ta = targetOf(line.start.bind, scene)
   const tb = targetOf(line.end.bind, scene)
   const { a, b } = lineAnchors(line, scene)
   const pad = line.padding
+  // Pinned ends never move when the other end does; unpinned bound ends aim across the line.
+  const fixed1 = ta && line.start.anchor ? anchoredPoint(ta, line.start.anchor, pad) : null
+  const fixed2 = tb && line.end.anchor ? anchoredPoint(tb, line.end.anchor, pad) : null
 
   if (line.route === 'elbow') {
     const horizontal = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y)
-    const attach = (t: Target | null, from: Pt, other: Pt): Pt => {
+    const attach = (t: Target | null, fixed: Pt | null, from: Pt, other: Pt): Pt => {
+      if (fixed) return fixed
       if (!t) return from
       const r = rectOfPoints(boxCorners(t.box))
       const c = center(r)
       if (horizontal) return { x: other.x >= c.x ? r.x + r.w + pad : r.x - pad, y: c.y }
       return { x: c.x, y: other.y >= c.y ? r.y + r.h + pad : r.y - pad }
     }
-    const p1 = attach(ta, a, b)
-    const p2 = attach(tb, b, a)
+    const p1 = attach(ta, fixed1, a, b)
+    const p2 = attach(tb, fixed2, b, a)
     const pts = horizontal
       ? [p1, { x: (p1.x + p2.x) / 2, y: p1.y }, { x: (p1.x + p2.x) / 2, y: p2.y }, p2]
       : [p1, { x: p1.x, y: (p1.y + p2.y) / 2 }, { x: p2.x, y: (p1.y + p2.y) / 2 }, p2]
@@ -194,8 +272,8 @@ export function resolveLine(line: LineObj, scene: Lookup): LineGeom {
     const m = mid(a, b)
     const n = norm({ x: -(b.y - a.y), y: b.x - a.x })
     const ctrl = add(m, scale(n, line.bend))
-    const p1 = ta ? boundaryPoint(ta, ctrl, pad) : a
-    const p2 = tb ? boundaryPoint(tb, ctrl, pad) : b
+    const p1 = fixed1 ?? (ta ? boundaryPoint(ta, ctrl, pad) : a)
+    const p2 = fixed2 ?? (tb ? boundaryPoint(tb, ctrl, pad) : b)
     const dir1 = norm(sub(p1, ctrl))
     const dir2 = norm(sub(p2, ctrl))
     const s1 = sub(p1, scale(dir1, capInset(line.startCap, line.strokeWidth)))
@@ -206,8 +284,8 @@ export function resolveLine(line: LineObj, scene: Lookup): LineGeom {
     return { p1, p2, d, pts: [p1, peak, p2], dir1, dir2, ctrl }
   }
 
-  const p1 = ta ? boundaryPoint(ta, b, pad) : a
-  const p2 = tb ? boundaryPoint(tb, a, pad) : b
+  const p1 = fixed1 ?? (ta ? boundaryPoint(ta, fixed2 ?? b, pad) : a)
+  const p2 = fixed2 ?? (tb ? boundaryPoint(tb, fixed1 ?? a, pad) : b)
   const dir2 = norm(sub(p2, p1))
   const dir1 = scale(dir2, -1)
   const total = dist(p1, p2)
@@ -216,6 +294,13 @@ export function resolveLine(line: LineObj, scene: Lookup): LineGeom {
   const s1 = sub(p1, scale(dir1, i1))
   const s2 = sub(p2, scale(dir2, i2))
   return { p1, p2, d: `M${f(s1.x)} ${f(s1.y)} L${f(s2.x)} ${f(s2.y)}`, pts: [p1, p2], dir1, dir2 }
+}
+
+/** Where a connector's label sits: the middle of the path. */
+export function lineMidpoint(g: LineGeom): Pt {
+  if (g.pts.length === 3) return g.pts[1] // curved: the peak
+  if (g.pts.length === 4) return mid(g.pts[1], g.pts[2]) // elbow: middle segment
+  return mid(g.p1, g.p2)
 }
 
 /** SVG path data for an end cap at `tip` pointing along `dir`. Filled caps use `fill`. */

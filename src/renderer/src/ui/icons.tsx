@@ -208,6 +208,12 @@ export const Icon = {
       <path d="M3 9h18M9 9v12" />
     </I>
   ),
+  grid: () => (
+    <I>
+      <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+    </I>
+  ),
   layers: () => (
     <I>
       <path d="M12 3l9 5-9 5-9-5z" />

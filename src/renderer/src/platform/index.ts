@@ -15,8 +15,8 @@ export interface Platform {
   saveFile(data: Uint8Array, suggestedName: string, path?: string): Promise<{ name: string; path?: string } | null>
   importFiles(): Promise<OpenedFile[]>
   exportFile(data: Uint8Array, suggestedName: string): Promise<boolean>
-  /** Vector PDF from a standalone SVG string, or null when unsupported. */
-  svgToPdf?(svg: string, widthIn: number, heightIn: number): Promise<Uint8Array>
+  /** Vector PDF with one page per standalone SVG (desktop only). */
+  svgToPdf?(pages: { svg: string; widthIn: number; heightIn: number }[]): Promise<Uint8Array>
   /** Small per-user JSON documents (templates, preferences). */
   readUserData(name: string): Promise<string | null>
   writeUserData(name: string, text: string): Promise<void>
@@ -31,7 +31,7 @@ interface NativeApi {
   saveFile(args: { path?: string; suggestedName: string; data: Uint8Array }): Promise<{ name: string; path: string } | null>
   importFiles(): Promise<OpenedFile[]>
   exportFile(args: { suggestedName: string; data: Uint8Array }): Promise<{ name: string; path: string } | null>
-  svgToPdf(args: { svg: string; widthIn: number; heightIn: number }): Promise<Uint8Array>
+  svgToPdf(pages: { svg: string; widthIn: number; heightIn: number }[]): Promise<Uint8Array>
   readUserData(name: string): Promise<string | null>
   writeUserData(name: string, text: string): Promise<void>
   setTitle(title: string): Promise<void>
@@ -53,7 +53,7 @@ function electronPlatform(n: NativeApi): Platform {
     saveFile: (data, suggestedName, path) => n.saveFile({ data, suggestedName, path }),
     importFiles: () => n.importFiles(),
     exportFile: async (data, suggestedName) => (await n.exportFile({ data, suggestedName })) !== null,
-    svgToPdf: (svg, widthIn, heightIn) => n.svgToPdf({ svg, widthIn, heightIn }),
+    svgToPdf: (pages) => n.svgToPdf(pages),
     readUserData: (name) => n.readUserData(name),
     writeUserData: (name, text) => n.writeUserData(name, text),
     setTitle: (t) => void n.setTitle(t),

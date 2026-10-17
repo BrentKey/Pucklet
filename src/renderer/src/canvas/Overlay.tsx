@@ -3,7 +3,9 @@ import type { Pt } from '../model/geometry'
 import { boxCorners, center, objectBounds, resolveLine, rotate } from '../model/geometry'
 import { boundsOf } from '../model/ops'
 import type { Handle } from '../model/transform'
-import type { Box, BrushObj, FigObject } from '../model/types'
+import type { Box, BrushObj, FigObject, IconObj } from '../model/types'
+import { fullImageBox } from '../model/crop'
+import { Node } from '../render/Figure'
 import { flattenPath } from '../model/brush'
 import { isBoxObj } from '../model/types'
 import { useEditor } from '../state/editor'
@@ -11,6 +13,7 @@ import { useEditor } from '../state/editor'
 const BLUE = '#2f80ed'
 const PURPLE = '#8b5cf6'
 const GUIDE = '#ec4899'
+const CROP = '#f59e0b'
 
 const HANDLES: { h: Handle; fx: number; fy: number; cursor: string }[] = [
   { h: 'nw', fx: 0, fy: 0, cursor: 'nwse-resize' },
@@ -126,6 +129,18 @@ function BrushHandles({ o, zoom }: { o: BrushObj; zoom: number }) {
   )
 }
 
+/** While cropping: the whole image, faded, so you can see what the crop leaves out. */
+function CropGhost({ o, snap }: { o: IconObj; snap: Snapshot }) {
+  const full = fullImageBox(o)
+  const c = center(o)
+  const ghost: IconObj = { ...o, ...full, rotation: 0, crop: undefined, cropShape: undefined, opacity: 0.35 }
+  return (
+    <g transform={o.rotation ? `rotate(${o.rotation} ${c.x} ${c.y})` : undefined} pointerEvents="none">
+      <Node o={ghost} snap={snap} mode="export" />
+    </g>
+  )
+}
+
 export function Overlay({ snap }: { snap: Snapshot }) {
   const selection = useEditor((s) => s.selection)
   const context = useEditor((s) => s.context)
@@ -134,6 +149,7 @@ export function Overlay({ snap }: { snap: Snapshot }) {
   const marquee = useEditor((s) => s.marquee)
   const zoom = useEditor((s) => s.view.zoom)
   const editingText = useEditor((s) => s.editingText)
+  const cropping = useEditor((s) => s.cropping)
   const px = 1 / zoom
   const { width: W, height: H } = snap.meta
 
@@ -151,6 +167,14 @@ export function Overlay({ snap }: { snap: Snapshot }) {
       <g>
         <BoxFrame box={{ ...b, rotation: 0 }} color={BLUE} zoom={zoom} handles rotatable />
         <BrushHandles o={sel[0]} zoom={zoom} />
+      </g>
+    )
+  } else if (sel.length === 1 && sel[0].type === 'icon' && cropping === sel[0].id) {
+    const o = sel[0]
+    frame = (
+      <g>
+        <CropGhost o={o} snap={snap} />
+        <BoxFrame box={o} color={CROP} zoom={zoom} handles rotatable={false} />
       </g>
     )
   } else if (sel.length === 1 && isBoxObj(sel[0])) {

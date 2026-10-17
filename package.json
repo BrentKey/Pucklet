@@ -18,8 +18,11 @@
     "test": "vitest run",
     "dist:mac": "electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
     "dist:win": "electron-vite build && electron-builder --win",
-    "icons": "node scripts/icons-bioicons.mjs",
-    "icon": "electron scripts/render-icon.cjs"
+    "icon": "electron scripts/render-icon.cjs",
+    "icons": "npm run icons:bioicons && npm run icons:reactome && npm run icons:phylopic",
+    "icons:bioicons": "node scripts/icons-bioicons.mjs",
+    "icons:reactome": "node scripts/icons-reactome.mjs",
+    "icons:phylopic": "node scripts/icons-phylopic.mjs"
   },
   "build": {
     "appId": "org.pucklet.app",

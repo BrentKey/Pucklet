@@ -4,14 +4,14 @@ import { DEFAULT_META } from './doc'
 import type { Asset, FigObject } from './types'
 
 // A .pucklet file is a zip so it stays readable by other tools:
-//   document.json     canvas settings + every object (see model/types.ts)
+//   document.json     pages, each with canvas settings + every object (see model/types.ts)
 //   assets.json       asset records (name, size, palette, source/licence), without the bytes
 //   assets/<id>.svg   SVG assets, as-is
 //   assets/<id>.png…  raster assets
 //   attributions.json credits for every third-party asset used, ready to cite
 
 export const FORMAT = 'pucklet'
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 const KNOWN_TYPES = new Set(['rect', 'ellipse', 'text', 'icon', 'line', 'brush', 'group'])
 const MIME_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
@@ -39,9 +39,21 @@ export function attributionsFor(assets: Asset[]): { name: string; library: strin
     .map((a) => ({ name: a.name, library: a.source!.library, author: a.source!.author, license: a.source!.license, url: a.source!.url }))
 }
 
-export function serialize(data: DocData, thumbnailPng?: Uint8Array): Uint8Array {
-  const usedAssets = new Set(data.objects.flatMap((o) => (o.type === 'icon' || (o.type === 'brush' && o.assetId) ? [o.assetId!] : [])))
-  const assets = data.assets.filter((a) => usedAssets.has(a.id))
+export interface PageData {
+  id: string
+  name: string
+  data: DocData
+}
+
+const assetIdsOf = (objects: FigObject[]) =>
+  objects.flatMap((o) => (o.type === 'icon' || (o.type === 'brush' && o.assetId) ? [o.assetId!] : []))
+
+/** Writes a multi-page figure. Assets are stored once and shared by all pages. */
+export function serializePages(pages: PageData[], thumbnailPng?: Uint8Array): Uint8Array {
+  const used = new Set(pages.flatMap((p) => assetIdsOf(p.data.objects)))
+  const byId = new Map<string, Asset>()
+  for (const p of pages) for (const a of p.data.assets) if (used.has(a.id)) byId.set(a.id, a)
+  const assets = [...byId.values()]
   const files: Record<string, Uint8Array> = {}
   const records = assets.map((a) => {
     const { data: content, ...rest } = a
@@ -55,13 +67,21 @@ export function serialize(data: DocData, thumbnailPng?: Uint8Array): Uint8Array 
     files[file] = bytes
     return { ...rest, file, mime }
   })
-  files['document.json'] = strToU8(
-    JSON.stringify({ format: FORMAT, schemaVersion: SCHEMA_VERSION, meta: data.meta, objects: data.objects }, null, 1)
-  )
+  const doc = {
+    format: FORMAT,
+    schemaVersion: SCHEMA_VERSION,
+    pages: pages.map((p) => ({ id: p.id, name: p.name, meta: p.data.meta, objects: p.data.objects }))
+  }
+  files['document.json'] = strToU8(JSON.stringify(doc, null, 1))
   files['assets.json'] = strToU8(JSON.stringify(records, null, 1))
   files['attributions.json'] = strToU8(JSON.stringify(attributionsFor(assets), null, 1))
   if (thumbnailPng) files['thumbnail.png'] = thumbnailPng
   return zipSync(files, { level: 6 })
+}
+
+/** Single-page convenience wrapper. */
+export function serialize(data: DocData, thumbnailPng?: Uint8Array): Uint8Array {
+  return serializePages([{ id: 'page-1', name: 'Page 1', data }], thumbnailPng)
 }
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -82,7 +102,7 @@ export function validObject(o: unknown): o is FigObject {
 }
 
 /** Parses a .pucklet file. Asset contents still need re-sanitizing by the caller. */
-export function deserialize(bytes: Uint8Array): DocData {
+export function deserializePages(bytes: Uint8Array): PageData[] {
   let files: Record<string, Uint8Array>
   try {
     files = unzipSync(bytes)
@@ -107,6 +127,23 @@ export function deserialize(bytes: Uint8Array): DocData {
     void _file
     assets.push({ ...rest, data: r.kind === 'svg' ? strFromU8(content) : bytesToDataUrl(content, mime ?? 'image/png') })
   }
-  const objects = (Array.isArray(doc.objects) ? doc.objects : []).filter(validObject)
-  return { meta: { ...DEFAULT_META, ...doc.meta }, objects, assets }
+  // Version 1 files have a single page stored at the top level.
+  const rawPages: { id?: string; name?: string; meta?: object; objects?: unknown[] }[] = Array.isArray(doc.pages)
+    ? doc.pages
+    : [{ meta: doc.meta, objects: doc.objects }]
+  if (!rawPages.length) rawPages.push({})
+  return rawPages.map((p, i) => {
+    const objects = (Array.isArray(p.objects) ? p.objects : []).filter(validObject)
+    const used = new Set(assetIdsOf(objects))
+    return {
+      id: typeof p.id === 'string' ? p.id : `page-${i + 1}`,
+      name: typeof p.name === 'string' && p.name ? p.name : `Page ${i + 1}`,
+      data: { meta: { ...DEFAULT_META, ...p.meta }, objects, assets: assets.filter((a) => used.has(a.id)) }
+    }
+  })
+}
+
+/** First page only (convenience for single-page callers and tests). */
+export function deserialize(bytes: Uint8Array): DocData {
+  return deserializePages(bytes)[0].data
 }

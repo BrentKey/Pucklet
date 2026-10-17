@@ -1,8 +1,8 @@
 import { memo } from 'react'
 import { instanceMarkup } from '../assets/svg'
 import type { Snapshot } from '../model/doc'
-import { capPath, center, resolveLine } from '../model/geometry'
-import type { Asset, Dash, EllipseObj, FigObject, IconObj, LineObj, RectObj, TextObj } from '../model/types'
+import { capPath, center, lineMidpoint, resolveLine } from '../model/geometry'
+import type { Asset, Dash, EllipseObj, FigObject, Gradient, IconObj, LineObj, RectObj, TextObj } from '../model/types'
 import { layoutText } from '../text/layout'
 import { BrushView } from './Brush'
 
@@ -25,45 +25,78 @@ const rotation = (o: { rotation: number; x: number; y: number; w: number; h: num
 
 const paint = (c: string) => (c === 'none' ? 'none' : c)
 
+/** <defs> for a shape's gradient fill (if any) and the fill value that references it. */
+function gradientFill(o: { id: string; fill: string; gradient?: Gradient }): { defs: React.ReactNode; fill: string } {
+  const g = o.gradient
+  if (!g) return { defs: null, fill: paint(o.fill) }
+  const id = `grad-${o.id}`
+  const stops = [<stop key="a" offset="0" stopColor={g.from} />, <stop key="b" offset="1" stopColor={g.to} />]
+  if (g.kind === 'radial') {
+    return { defs: <defs><radialGradient id={id}>{stops}</radialGradient></defs>, fill: `url(#${id})` }
+  }
+  const r = (g.angle * Math.PI) / 180
+  const dx = Math.cos(r) / 2
+  const dy = Math.sin(r) / 2
+  const p = (n: number) => Math.round(n * 1000) / 1000
+  return {
+    defs: (
+      <defs>
+        <linearGradient id={id} x1={p(0.5 - dx)} y1={p(0.5 - dy)} x2={p(0.5 + dx)} y2={p(0.5 + dy)}>
+          {stops}
+        </linearGradient>
+      </defs>
+    ),
+    fill: `url(#${id})`
+  }
+}
+
 function RectView({ o, mode }: { o: RectObj; mode: RenderMode }) {
+  const { defs, fill } = gradientFill(o)
   return (
-    <rect
-      data-id={mode === 'canvas' ? o.id : undefined}
-      x={o.x}
-      y={o.y}
-      width={o.w}
-      height={o.h}
-      rx={o.radius || undefined}
-      fill={paint(o.fill)}
-      stroke={o.strokeWidth > 0 ? paint(o.stroke) : 'none'}
-      strokeWidth={o.strokeWidth || undefined}
-      strokeDasharray={dashArray(o.dash, o.strokeWidth)}
-      strokeLinecap={o.dash === 'dotted' ? 'round' : undefined}
-      opacity={o.opacity < 1 ? o.opacity : undefined}
-      transform={rotation(o)}
-      // Panel frames are only grabbable by their outline so they don't block clicks inside.
-      pointerEvents={mode === 'canvas' ? (o.role === 'panel-frame' ? 'visibleStroke' : 'visible') : undefined}
-    />
+    <>
+      {defs}
+      <rect
+        data-id={mode === 'canvas' ? o.id : undefined}
+        x={o.x}
+        y={o.y}
+        width={o.w}
+        height={o.h}
+        rx={o.radius || undefined}
+        fill={fill}
+        stroke={o.strokeWidth > 0 ? paint(o.stroke) : 'none'}
+        strokeWidth={o.strokeWidth || undefined}
+        strokeDasharray={dashArray(o.dash, o.strokeWidth)}
+        strokeLinecap={o.dash === 'dotted' ? 'round' : undefined}
+        opacity={o.opacity < 1 ? o.opacity : undefined}
+        transform={rotation(o)}
+        // Panel frames are only grabbable by their outline so they don't block clicks inside.
+        pointerEvents={mode === 'canvas' ? (o.role === 'panel-frame' ? 'visibleStroke' : 'visible') : undefined}
+      />
+    </>
   )
 }
 
 function EllipseView({ o, mode }: { o: EllipseObj; mode: RenderMode }) {
+  const { defs, fill } = gradientFill(o)
   return (
-    <ellipse
-      data-id={mode === 'canvas' ? o.id : undefined}
-      cx={o.x + o.w / 2}
-      cy={o.y + o.h / 2}
-      rx={o.w / 2}
-      ry={o.h / 2}
-      fill={paint(o.fill)}
-      stroke={o.strokeWidth > 0 ? paint(o.stroke) : 'none'}
-      strokeWidth={o.strokeWidth || undefined}
-      strokeDasharray={dashArray(o.dash, o.strokeWidth)}
-      strokeLinecap={o.dash === 'dotted' ? 'round' : undefined}
-      opacity={o.opacity < 1 ? o.opacity : undefined}
-      transform={rotation(o)}
-      pointerEvents={mode === 'canvas' ? 'visible' : undefined}
-    />
+    <>
+      {defs}
+      <ellipse
+        data-id={mode === 'canvas' ? o.id : undefined}
+        cx={o.x + o.w / 2}
+        cy={o.y + o.h / 2}
+        rx={o.w / 2}
+        ry={o.h / 2}
+        fill={fill}
+        stroke={o.strokeWidth > 0 ? paint(o.stroke) : 'none'}
+        strokeWidth={o.strokeWidth || undefined}
+        strokeDasharray={dashArray(o.dash, o.strokeWidth)}
+        strokeLinecap={o.dash === 'dotted' ? 'round' : undefined}
+        opacity={o.opacity < 1 ? o.opacity : undefined}
+        transform={rotation(o)}
+        pointerEvents={mode === 'canvas' ? 'visible' : undefined}
+      />
+    </>
   )
 }
 
@@ -85,7 +118,7 @@ function TextView({ o, mode }: { o: TextObj; mode: RenderMode }) {
               textDecoration={r.run.underline ? 'underline' : undefined}
               fill={r.run.color}
             >
-              {r.run.text}
+              {r.text}
             </tspan>
           ))
         )}
@@ -114,17 +147,61 @@ function IconView({ o, asset, mode }: { o: IconObj; asset: Asset | undefined; mo
       </g>
     )
   }
+  const crop = o.crop
+  let content: React.ReactNode
   if (asset.kind === 'raster') {
-    return (
-      <g {...common}>
-        <image href={asset.data} x={o.x} y={o.y} width={o.w} height={o.h} preserveAspectRatio="none" />
-      </g>
+    const W = asset.width
+    const H = asset.height
+    content = crop ? (
+      <svg x={o.x} y={o.y} width={o.w} height={o.h} viewBox={`${crop.x * W} ${crop.y * H} ${crop.w * W} ${crop.h * H}`} preserveAspectRatio="none">
+        <image href={asset.data} width={W} height={H} preserveAspectRatio="none" />
+      </svg>
+    ) : (
+      <image href={asset.data} x={o.x} y={o.y} width={o.w} height={o.h} preserveAspectRatio="none" />
     )
+  } else {
+    content = <g dangerouslySetInnerHTML={{ __html: instanceMarkup(asset, o, o.recolor, 'i' + o.id, crop) }} />
   }
+  const shape = o.cropShape && o.cropShape !== 'rect' ? o.cropShape : crop ? 'rect' : null
+  const clipId = `clip-${o.id}`
   return (
     <g {...common}>
+      {shape && (
+        <defs>
+          <clipPath id={clipId}>
+            {shape === 'ellipse' ? (
+              <ellipse cx={c.x} cy={c.y} rx={o.w / 2} ry={o.h / 2} />
+            ) : (
+              <rect x={o.x} y={o.y} width={o.w} height={o.h} rx={shape === 'rounded' ? Math.min(o.w, o.h) * 0.15 : undefined} />
+            )}
+          </clipPath>
+        </defs>
+      )}
       {mode === 'canvas' && <rect x={o.x} y={o.y} width={o.w} height={o.h} fill="transparent" />}
-      <g dangerouslySetInnerHTML={{ __html: instanceMarkup(asset, o, o.recolor, 'i' + o.id) }} />
+      {shape ? <g clipPath={`url(#${clipId})`}>{content}</g> : content}
+    </g>
+  )
+}
+
+function LineLabel({ o, at, background }: { o: LineObj; at: { x: number; y: number }; background: string }) {
+  const size = o.labelSize ?? 14
+  const lines = o.label!.split('\n')
+  const layout = layoutText({ lines: lines.map((t) => (t ? [{ text: t }] : [])), fontFamily: 'Arial', fontSize: size, lineHeight: 1.2, align: 'center' })
+  const pad = size * 0.3
+  const x = at.x - layout.width / 2
+  const y = at.y - layout.height / 2
+  return (
+    <g>
+      <rect x={x - pad} y={y - pad / 2} width={layout.width + pad * 2} height={layout.height + pad} rx={pad} fill={background} />
+      <text fontFamily="Arial" fontSize={size} fill={paint(o.stroke === 'none' ? '#333333' : o.stroke)} xmlSpace="preserve">
+        {layout.lines.flatMap((line, i) =>
+          line.runs.map((r, j) => (
+            <tspan key={`${i}-${j}`} x={round(x + line.left + r.x)} y={round(y + line.baseline)}>
+              {r.text}
+            </tspan>
+          ))
+        )}
+      </text>
     </g>
   )
 }
@@ -147,6 +224,7 @@ export function LineView({ o, snap, mode }: { o: LineObj; snap: Snapshot; mode: 
         strokeLinecap={o.dash === 'dotted' ? 'round' : 'butt'}
         strokeLinejoin="round"
       />
+      {o.label?.trim() && <LineLabel o={o} at={lineMidpoint(g)} background={snap.meta.background === 'none' ? '#ffffff' : snap.meta.background} />}
       {caps.map((c, i) =>
         c ? (
           <path
@@ -207,9 +285,9 @@ export function Node({ o, snap, mode, hidden }: NodeProps) {
 export function SceneContent({ snap, mode, hidden }: { snap: Snapshot; mode: RenderMode; hidden?: ReadonlySet<string> }) {
   return (
     <>
-      {snap.children('').map((o) => (
-        <Node key={o.id} o={o} snap={snap} mode={mode} hidden={hidden} />
-      ))}
+        {snap.children('').map((o) => (
+          <Node key={o.id} o={o} snap={snap} mode={mode} hidden={hidden} />
+        ))}
     </>
   )
 }

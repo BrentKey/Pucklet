@@ -203,9 +203,17 @@ export function instanceMarkup(
   asset: Asset,
   box: { x: number; y: number; w: number; h: number },
   recolor: Record<string, Color>,
-  prefix: string
+  prefix: string,
+  crop?: { x: number; y: number; w: number; h: number }
 ): string {
   let s = asset.data
+  if (crop) {
+    // Show only the cropped part by narrowing the root viewBox.
+    s = s.replace(/^(<svg\b[^>]*?\bviewBox=")([^"]+)(")/, (_m, a: string, vb: string, b: string) => {
+      const [vx, vy, vw, vh] = vb.trim().split(/[\s,]+/).map(Number)
+      return `${a}${vx + crop.x * vw} ${vy + crop.y * vh} ${crop.w * vw} ${crop.h * vh}${b}`
+    })
+  }
   const swaps = Object.entries(recolor).filter(([from, to]) => from !== to)
   if (swaps.length) {
     // One pass, so swapping A->B and B->A at the same time works.

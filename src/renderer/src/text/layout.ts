@@ -11,6 +11,8 @@ const ASCENT = 0.8
 
 export interface LaidRun {
   run: TextRun
+  /** The part of the run's text on this visual line (runs can wrap over several lines). */
+  text: string
   x: number
   /** Baseline offset relative to the line's baseline. */
   dy: number
@@ -32,7 +34,7 @@ export interface TextLayout {
   height: number
 }
 
-type TextStyle = Pick<TextObj, 'lines' | 'fontFamily' | 'fontSize' | 'lineHeight' | 'align'>
+type TextStyle = Pick<TextObj, 'lines' | 'fontFamily' | 'fontSize' | 'lineHeight' | 'align'> & { wrap?: number }
 
 let ctx: CanvasRenderingContext2D | null | undefined
 
@@ -52,19 +54,60 @@ export function cssFont(run: TextRun, size: number, family: string): string {
 export function layoutText(t: TextStyle): TextLayout {
   const fs = t.fontSize
   const lh = fs * t.lineHeight
-  const lines: LaidLine[] = t.lines.map((line, i) => {
+  const wrap = t.wrap && t.wrap > 0 ? t.wrap : Infinity
+  const visual: { runs: LaidRun[]; width: number }[] = []
+
+  for (const line of t.lines) {
+    let cur: LaidRun[] = []
     let x = 0
-    const runs: LaidRun[] = line.map((run) => {
+    // The most recent piece if it was whitespace, so a wrapped line can drop its trailing space.
+    let trailing: { width: number; length: number } | null = null
+    const pushLine = () => {
+      // Trailing spaces don't count towards the line's width (they'd skew centring).
+      const last = cur[cur.length - 1]
+      if (trailing && last && wrap !== Infinity) {
+        last.text = last.text.slice(0, -trailing.length)
+        last.width -= trailing.width
+        if (!last.text) cur.pop()
+      }
+      trailing = null
+      visual.push({ runs: cur, width: cur.length ? cur[cur.length - 1].x + cur[cur.length - 1].width : 0 })
+      cur = []
+      x = 0
+    }
+    for (const run of line) {
       const size = run.script ? fs * SCRIPT_SCALE : fs
-      const width = measure(run.text, cssFont(run, size, t.fontFamily), size)
+      const font = cssFont(run, size, t.fontFamily)
       const dy = run.script === 'super' ? fs * SUPER_SHIFT : run.script === 'sub' ? fs * SUB_SHIFT : 0
-      const laid = { run, x, dy, fontSize: size, width }
-      x += width
-      return laid
-    })
-    return { runs, width: x, left: 0, baseline: i * lh + (lh - fs) / 2 + fs * ASCENT }
-  })
-  const width = Math.max(1, ...lines.map((l) => l.width))
+      // Words and the spaces between them, so lines can break at spaces (across runs too).
+      const pieces = wrap === Infinity ? [run.text] : run.text.split(/(\s+)/).filter(Boolean)
+      for (const piece of pieces) {
+        const isSpace = !piece.trim()
+        if (isSpace && !cur.length && wrap !== Infinity) continue // no leading spaces on wrapped lines
+        const width = measure(piece, font, size)
+        if (!isSpace && cur.length && x + width > wrap) pushLine()
+        const prev = cur[cur.length - 1]
+        // Pieces of the same run on the same line are drawn as one span.
+        if (prev && prev.run === run) {
+          prev.text += piece
+          prev.width += width
+        } else {
+          cur.push({ run, text: piece, x, dy, fontSize: size, width })
+        }
+        x += width
+        trailing = isSpace ? { width, length: piece.length } : null
+      }
+    }
+    pushLine()
+  }
+
+  const lines: LaidLine[] = visual.map((v, i) => ({
+    runs: v.runs,
+    width: v.width,
+    left: 0,
+    baseline: i * lh + (lh - fs) / 2 + fs * ASCENT
+  }))
+  const width = wrap === Infinity ? Math.max(1, ...lines.map((l) => l.width)) : wrap
   for (const l of lines) {
     l.left = t.align === 'center' ? (width - l.width) / 2 : t.align === 'right' ? width - l.width : 0
   }

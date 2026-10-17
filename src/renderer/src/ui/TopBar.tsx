@@ -5,7 +5,8 @@ import { fitView, setZoom, zoomAt } from '../canvas/view'
 import { platform } from '../platform'
 import type { Tool, ViewFilter } from '../state/editor'
 import { useDirty, useEditor } from '../state/editor'
-import { IconButton } from './controls'
+import { IconButton, NumberField } from './controls'
+import { setPrefs } from '../app/prefs'
 import { BRUSH_PRESETS } from '../model/brush'
 import type { BrushKind } from '../model/types'
 import { Icon } from './icons'
@@ -28,6 +29,48 @@ const FILTERS: { value: ViewFilter; label: string }[] = [
   { value: 'protanopia', label: 'Protanopia (red–green)' },
   { value: 'tritanopia', label: 'Tritanopia (blue–yellow)' }
 ]
+
+function ViewMenu() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const prefs = useEditor((s) => s.prefs)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [open])
+  const check = (label: string, on: boolean, toggle: () => void, hint?: string) => (
+    <label className="menu-check">
+      <input type="checkbox" checked={on} onChange={toggle} />
+      <span>{label}</span>
+      {hint && <kbd>{hint}</kbd>}
+    </label>
+  )
+  return (
+    <div className="menu" ref={ref}>
+      <IconButton title="View options: rulers, grid" onClick={() => setOpen(!open)} active={open}>
+        <Icon.grid />
+      </IconButton>
+      {open && (
+        <div className="menu-pop right">
+          {check('Rulers', prefs.showRulers, commands['view.rulers'], '⇧R')}
+          {check('Grid', prefs.showGrid, commands['view.grid'], "⌘'")}
+          {check('Snap to grid', prefs.snapToGrid, commands['view.snapGrid'])}
+          <div className="menu-row">
+            <span>Grid size</span>
+            <NumberField value={prefs.gridSize} min={2} max={500} precision={0} suffix="px" onChange={(gridSize) => setPrefs({ gridSize: Math.round(gridSize) })} />
+          </div>
+          <hr />
+          <button onClick={() => (setOpen(false), commands['help.shortcuts']())}>
+            <span>Keyboard shortcuts</span>
+            <kbd>?</kbd>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function FileMenu() {
   const [open, setOpen] = useState(false)
@@ -142,6 +185,7 @@ export function TopBar() {
             </option>
           ))}
         </select>
+        <ViewMenu />
         <div className="zoom">
           <IconButton title="Zoom out" onClick={() => zoomAt(0.8)}>
             <Icon.minus />

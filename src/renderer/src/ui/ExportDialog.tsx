@@ -18,6 +18,9 @@ export function ExportDialog() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const pages = useEditor((s) => s.pages)
+  const [allPages, setAllPages] = useState(true)
+  const multi = pages.length > 1 && (format === 'pdf' || format === 'pptx')
   const { width: W, height: H } = snap.meta
   const credits = useMemo(() => creditText(creditsFor(snap)), [snap])
   const scale = dpi / 96
@@ -31,11 +34,13 @@ export function ExportDialog() {
     setError(null)
     try {
       const svg = figureSvg(snap, { transparent: format !== 'pdf' && transparent })
+      // PDF and PowerPoint can hold every page; the image formats export the current page.
+      const snaps = multi && allPages ? pages.map((p) => p.doc.snapshot()) : [snap]
       let bytes: Uint8Array
       if (format === 'svg') bytes = new TextEncoder().encode(svg)
-      else if (format === 'pptx') bytes = await (await import('../export/pptx')).figureToPptx(snap, { transparent })
+      else if (format === 'pptx') bytes = await (await import('../export/pptx')).figureToPptx(snaps, { transparent })
       else if (format === 'png') bytes = await svgToPng(svg, W, H, scale, dpi)
-      else bytes = await platform.svgToPdf!(svg, W / 96, H / 96)
+      else bytes = await platform.svgToPdf!(snaps.map((s) => ({ svg: figureSvg(s), widthIn: s.meta.width / 96, heightIn: s.meta.height / 96 })))
       if (await platform.exportFile(bytes, `${base}.${format}`)) {
         useEditor.getState().showToast(`Exported ${base}.${format}`)
         close()
@@ -80,6 +85,24 @@ export function ExportDialog() {
               {pw.toLocaleString()} × {ph.toLocaleString()} px · {(W / 96).toFixed(2)} × {(H / 96).toFixed(2)} in
               {tooBig && ' — too large to render; choose a lower resolution.'}
             </p>
+          </div>
+        )}
+
+        {pages.length > 1 && (
+          <div className="field">
+            <label>Pages</label>
+            {multi ? (
+              <Segmented
+                value={allPages ? 'all' : 'one'}
+                onChange={(v) => setAllPages(v === 'all')}
+                options={[
+                  { value: 'all', label: `All ${pages.length} pages` },
+                  { value: 'one', label: 'This page' }
+                ]}
+              />
+            ) : (
+              <p className="muted small">{format.toUpperCase()} exports the current page. Use PDF or PowerPoint for all pages at once.</p>
+            )}
           </div>
         )}
 

@@ -3,17 +3,19 @@ import { makeBrush, makeEllipse, makeLine, makeRect, makeText } from '../model/d
 import { simplify } from '../model/brush'
 import type { Snapshot } from '../model/doc'
 import type { Pt, Rect } from '../model/geometry'
-import { boxContains, center, dist, lineAnchors, norm, objectBounds, rectsIntersect, snapAngle, sub } from '../model/geometry'
+import { bindingFor, center, dist, lineAnchors, norm, objectBounds, rectsIntersect, resolveLine, snapAngle, sub } from '../model/geometry'
 import { applyChanges, boundsOf, copyObjects, pasteClip } from '../model/ops'
 import type { Changes, Handle } from '../model/transform'
 import { resizeBox, rotateAbout, scaleAbout, translate, withTextSize } from '../model/transform'
-import type { BrushObj, FigObject, Id, LineObj } from '../model/types'
+import type { BrushObj, FigObject, IconObj, Id, LineObj, TextObj } from '../model/types'
+import { cropPan, cropResize } from '../model/crop'
 import { isBoxObj } from '../model/types'
 import { SceneContent } from '../render/Figure'
 import { useEditor, useLiveSnapshot, useSnapshot } from '../state/editor'
 import { importDroppedFiles, placeLibraryIcon, LIBRARY_DRAG_TYPE } from '../library/place'
 import { Overlay } from './Overlay'
 import { TextEditor } from './TextEditor'
+import { Rulers } from './Rulers'
 import { fitView, zoomAt } from './view'
 
 type Drag =
@@ -26,6 +28,8 @@ type Drag =
   | { kind: 'line-end'; line: LineObj; which: 'start' | 'end'; base: Snapshot; isNew: boolean }
   | { kind: 'bend'; line: LineObj; base: Snapshot }
   | { kind: 'sketch'; pts: Pt[]; parent: Id | ''; z: string }
+  | { kind: 'text-box'; origin: Pt; obj: TextObj; left?: number; width?: number }
+  | { kind: 'crop-pan'; origin: Pt; icon: IconObj }
   | { kind: 'brush-point'; brush: BrushObj; index: number }
 
 const SNAP_PX = 6
@@ -57,7 +61,11 @@ function nearest(v: number, cands: number[], tol: number): number | null {
 }
 
 /** Topmost bindable object under p (connectors attach to shapes, text and icons). */
-function findBindTarget(snap: Snapshot, p: Pt, exclude: Id, tolerance: number): Id | null {
+/**
+ * What a connector end dropped at p should attach to (topmost first), following the rules in
+ * geometry.bindingFor: pinned to an outline, attached to a small object, or nothing.
+ */
+function findBinding(snap: Snapshot, p: Pt, exclude: Id, zoom: number): { id: Id; anchor?: { x: number; y: number } } | null {
   const order: FigObject[] = []
   const walk = (parent: Id | '') => {
     for (const o of snap.children(parent)) {
@@ -69,7 +77,9 @@ function findBindTarget(snap: Snapshot, p: Pt, exclude: Id, tolerance: number): 
   walk('')
   for (let i = order.length - 1; i >= 0; i--) {
     const o = order[i]
-    if (o.id !== exclude && !o.hidden && isBoxObj(o) && boxContains(o, p, tolerance)) return o.id
+    if (o.id === exclude) continue
+    const b = bindingFor(o, p, zoom)
+    if (b) return { id: o.id, ...b }
   }
   return null
 }
@@ -84,6 +94,7 @@ export function Canvas() {
   const tool = useEditor((s) => s.tool)
   const editingText = useEditor((s) => s.editingText)
   const filter = useEditor((s) => s.filter)
+  const prefs = useEditor((s) => s.prefs)
   const doc = useEditor((s) => s.doc)
   const { width: W, height: H, background } = snap.meta
 
@@ -91,7 +102,13 @@ export function Canvas() {
   useLayoutEffect(() => {
     const el = wrapRef.current!
     const ro = new ResizeObserver(() => {
-      useEditor.getState().set({ viewport: { w: el.clientWidth, h: el.clientHeight } })
+      // Keep whatever is in the middle of the view in the middle when the window resizes.
+      const s = useEditor.getState()
+      const w = el.clientWidth
+      const h = el.clientHeight
+      const dx = (w - s.viewport.w) / 2
+      const dy = (h - s.viewport.h) / 2
+      s.set({ viewport: { w, h }, view: { ...s.view, panX: s.view.panX + dx, panY: s.view.panY + dy } })
     })
     ro.observe(el)
     useEditor.getState().set({ viewport: { w: el.clientWidth, h: el.clientHeight } })
@@ -225,8 +242,7 @@ export function Canvas() {
       case 'text': {
         // Keep the browser from moving focus to the canvas, which would blur the new editor.
         e.preventDefault()
-        const obj = withParent(makeText(z, p.x, p.y - 12))
-        s.set({ drafts: new Map([[obj.id, obj]]), editingText: obj.id, selection: [obj.id], tool: 'select' })
+        drag.current = { kind: 'text-box', origin: p, obj: withParent(makeText(z, p.x, p.y - 12)) }
         return
       }
       case 'brush': {
@@ -237,9 +253,9 @@ export function Canvas() {
       case 'line':
       case 'arrow': {
         const style = s.tool === 'arrow' ? s.lineStyle : { ...s.lineStyle, startCap: 'none' as const, endCap: 'none' as const }
-        const bind = e.altKey ? null : findBindTarget(base, p, '', 4 / s.view.zoom)
+        const bind = e.altKey ? null : findBinding(base, p, '', s.view.zoom)
         const line = withParent(makeLine(z, p.x, p.y, style))
-        if (bind) line.start = { x: p.x, y: p.y, bind }
+        if (bind) line.start = { x: p.x, y: p.y, bind: bind.id, ...(bind.anchor ? { anchor: bind.anchor } : {}) }
         drag.current = { kind: 'line-end', line, which: 'end', base, isNew: true }
         s.set({ drafts: new Map([[line.id, line]]) })
         return
@@ -248,6 +264,11 @@ export function Canvas() {
 
     // Select tool.
     const hit = selectableFrom(e.target)
+    if (s.cropping && hit !== s.cropping) s.set({ cropping: null })
+    if (hit && hit === s.cropping) {
+      drag.current = { kind: 'crop-pan', origin: p, icon: base.get(hit) as IconObj }
+      return
+    }
     if (hit) {
       let sel = s.selection
       let clickSelect: Id | undefined
@@ -296,7 +317,12 @@ export function Canvas() {
           else dx = 0
         }
         const guides = { x: [] as number[], y: [] as number[] }
-        if (!e.metaKey && !e.ctrlKey) {
+        if (s.prefs.snapToGrid && !e.metaKey && !e.ctrlKey) {
+          // Grid snapping: the selection's top-left corner lands on grid points.
+          const G = s.prefs.gridSize
+          dx = Math.round((d.bounds.x + dx) / G) * G - d.bounds.x
+          dy = Math.round((d.bounds.y + dy) / G) * G - d.bounds.y
+        } else if (!e.metaKey && !e.ctrlKey) {
           const snap1 = (edges: number[], cands: number[]) => {
             let best = SNAP_PX / zoom
             let off = 0
@@ -321,7 +347,11 @@ export function Canvas() {
         // Snap the dragged edge(s) to nearby guides (only meaningful for unrotated boxes).
         const guides = { x: [] as number[], y: [] as number[] }
         const unrotated = !(single && isBoxObj(single) && single.rotation)
-        if (unrotated && !e.metaKey && !e.ctrlKey) {
+        if (unrotated && s.prefs.snapToGrid && !e.metaKey && !e.ctrlKey) {
+          const G = s.prefs.gridSize
+          p.x = Math.round(p.x / G) * G
+          p.y = Math.round(p.y / G) * G
+        } else if (unrotated && !e.metaKey && !e.ctrlKey) {
           const tol = SNAP_PX / zoom
           if (d.handle.includes('e') || d.handle.includes('w')) {
             const gx = nearest(p.x, d.xs, tol)
@@ -333,12 +363,26 @@ export function Canvas() {
           }
         }
         s.set({ guides })
+        if (single?.type === 'icon' && s.cropping === single.id) {
+          const icon = cropResize(single, d.handle, p)
+          s.set({ drafts: new Map([[icon.id, icon]]) })
+          return
+        }
         if (single && isBoxObj(single)) {
           const proportional = single.type === 'icon' || single.type === 'text' ? !e.shiftKey : e.shiftKey
+          if (single.type === 'text' && (d.handle === 'e' || d.handle === 'w')) {
+            // Side handles set the width the text wraps within; the font size stays.
+            const r = resizeBox(single, d.handle, p, false)
+            const t = withTextSize({ ...single, wrap: Math.max(20, r.w) })
+            const x = d.handle === 'w' ? single.x + single.w - t.w : single.x
+            s.set({ drafts: new Map([[t.id, { ...t, x }]]) })
+            return
+          }
           let r = resizeBox(single, d.handle, p, proportional || single.type === 'text')
           if (r.type === 'text' && single.type === 'text') {
-            const fontSize = Math.max(1, Math.round(single.fontSize * (r.h / single.h) * 10) / 10)
-            const t = withTextSize({ ...single, fontSize })
+            const k = r.h / single.h
+            const fontSize = Math.max(1, Math.round(single.fontSize * k * 10) / 10)
+            const t = withTextSize({ ...single, fontSize, ...(single.wrap ? { wrap: single.wrap * k } : {}) })
             const c = center(r)
             r = { ...t, x: c.x - t.w / 2, y: c.y - t.h / 2 }
           }
@@ -395,20 +439,38 @@ export function Canvas() {
       }
 
       case 'line-end': {
-        const bind = e.altKey ? null : findBindTarget(d.base, p, d.line.id, 4 / zoom)
+        const bind = e.altKey ? null : findBinding(d.base, p, d.line.id, zoom)
         const other = d.which === 'start' ? d.line.end : d.line.start
         // Don't attach both ends to the same object.
-        const target = bind && bind !== other.bind ? bind : null
+        const target = bind && bind.id !== other.bind ? bind : null
         let q = p
         if (e.shiftKey && !target) {
-          const o = other.bind ? center(d.base.get(other.bind) as never) : other
+          // Shift: constrain to 45° steps from where the other end actually is.
+          const g = resolveLine(d.line, d.base)
+          const o = d.which === 'start' ? g.p2 : g.p1
           const ang = snapAngle((Math.atan2(p.y - o.y, p.x - o.x) * 180) / Math.PI, 45) * (Math.PI / 180)
           const l = dist(o, p)
           q = { x: o.x + Math.cos(ang) * l, y: o.y + Math.sin(ang) * l }
         }
-        const ep = target ? { x: q.x, y: q.y, bind: target } : { x: q.x, y: q.y }
+        const ep = target ? { x: q.x, y: q.y, bind: target.id, ...(target.anchor ? { anchor: target.anchor } : {}) } : { x: q.x, y: q.y }
         const line = { ...d.line, [d.which]: ep }
-        s.set({ drafts: new Map([[line.id, line]]), bindTarget: target })
+        s.set({ drafts: new Map([[line.id, line]]), bindTarget: target?.id ?? null })
+        return
+      }
+
+      case 'crop-pan': {
+        const icon = cropPan(d.icon, p.x - d.origin.x, p.y - d.origin.y)
+        s.set({ drafts: new Map([[icon.id, icon]]) })
+        return
+      }
+
+      case 'text-box': {
+        // Dragging with the text tool draws a fixed-width box that the text wraps within.
+        const w = Math.abs(p.x - d.origin.x)
+        if (w * zoom < 8) return
+        d.width = w
+        d.left = Math.min(p.x, d.origin.x)
+        s.set({ marquee: { x: Math.min(p.x, d.origin.x), y: d.origin.y, w, h: Math.max(4, p.y - d.origin.y) } })
         return
       }
 
@@ -465,6 +527,12 @@ export function Canvas() {
       s.set({ selection: [obj.id], tool: 'select' })
       return done()
     }
+    if (d.kind === 'text-box') {
+      let obj: TextObj = d.obj
+      if (d.width) obj = withTextSize({ ...obj, x: d.left ?? d.origin.x, y: d.origin.y, wrap: Math.max(20, d.width) })
+      s.set({ drafts: new Map([[obj.id, obj]]), editingText: obj.id, selection: [obj.id], tool: 'select', marquee: null })
+      return
+    }
     if (d.kind === 'sketch') {
       s.set({ sketch: null })
       let pts = d.pts
@@ -515,6 +583,11 @@ export function Canvas() {
       if (child?.type === 'text' && !child.locked) s.set({ editingText: child.id })
     } else if (o.type === 'text' && !o.locked) {
       s.set({ editingText: o.id, selection: [o.id] })
+    } else if (o.type === 'line' && !o.locked) {
+      s.set({ selection: [o.id] })
+      requestAnimationFrame(() => (document.getElementById('connector-label') as HTMLInputElement | null)?.focus())
+    } else if (o.type === 'icon' && !o.locked) {
+      s.set({ selection: [o.id], cropping: s.cropping === o.id ? null : o.id })
     }
   }
 
@@ -555,6 +628,9 @@ export function Canvas() {
               <feColorMatrix type="matrix" values={m} />
             </filter>
           ))}
+          <pattern id="grid" width={prefs.gridSize} height={prefs.gridSize} patternUnits="userSpaceOnUse">
+            <path d={`M${prefs.gridSize} 0 L0 0 0 ${prefs.gridSize}`} fill="none" stroke="#c7d2fe" strokeWidth={1 / view.zoom} />
+          </pattern>
           <pattern id="checker" width="16" height="16" patternUnits="userSpaceOnUse">
             <rect width="8" height="8" fill="#e6e6e6" />
             <rect x="8" y="8" width="8" height="8" fill="#e6e6e6" />
@@ -566,6 +642,7 @@ export function Canvas() {
         <g transform={`translate(${view.panX} ${view.panY}) scale(${view.zoom})`}>
           <rect x={0} y={0} width={W} height={H} fill={background === 'none' ? '#ffffff' : background} filter="url(#artboard-shadow)" />
           {background === 'none' && <rect x={0} y={0} width={W} height={H} fill="url(#checker)" />}
+          {prefs.showGrid && prefs.gridSize * view.zoom >= 5 && <rect x={0} y={0} width={W} height={H} fill="url(#grid)" pointerEvents="none" />}
           <g style={{ filter: filterCss }}>
             <SceneContent snap={live} mode="canvas" hidden={hidden} />
           </g>
@@ -574,6 +651,7 @@ export function Canvas() {
         </g>
       </svg>
       {editingText && <TextEditor key={editingText} id={editingText} />}
+      <Rulers />
     </div>
   )
 }

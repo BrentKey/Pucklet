@@ -15,7 +15,7 @@ Requires Node 22+.
 
 ```bash
 npm install
-npm run icons      # downloads, optimizes (SVGO) and builds the Bioicons pack (~2,400 icons, CC0/CC BY/MIT/BSD; takes a few minutes)
+npm run icons      # downloads and optimizes the icon libraries: Bioicons, Reactome, PhyloPic (~5,100 icons; ~10 minutes)
 npm run dev        # desktop app (Electron) with hot reload
 ```
 
@@ -28,6 +28,7 @@ Other scripts:
 | `npm run typecheck` | Type-checks main, preload and renderer. |
 | `npm run build` / `npm start` | Production build, then runs it. |
 | `npm run dist:mac` / `npm run dist:win` | Builds an installer (`dist/Pucklet-<version>.dmg` / `.exe`). The Mac build is unsigned for now. |
+| `npm run icons:bioicons` / `icons:reactome` / `icons:phylopic` | Rebuild a single library (`icons:phylopic -- --all` fetches every suitably licensed PhyloPic silhouette, ~12k). |
 | `npm run icon` | Re-renders `build/icon.png` from `build/icon.svg` after editing the app icon. |
 | `PUCKLET_SMOKE_DIR=/some/dir npx electron .` | After `npm run build`: launches the app, saves a screenshot, a test PDF and a JSON report to that directory, then quits. |
 
@@ -37,13 +38,16 @@ Other scripts:
 - **Editing**: select, marquee, shift-select, move and resize with smart guides (snap to other objects and the canvas; hold ⌘ to turn off), resize keeps proportions for icons/text (Shift toggles), rotate (Shift = 15°), nudge, group/ungroup (double-click to enter), z-order, lock, duplicate, align & distribute, undo/redo (slider and colour-picker drags count as one step).
 - **Layers panel**: every object top-most first, with show/hide, lock, rename (double-click) and drag-to-reorder or drop into a group.
 - **Shapes**: rectangles and ellipses with fill, stroke, dash and corner radius.
-- **Connectors**: straight, curved (drag the ◆ handle) or elbow; attach to shapes/text/icons and follow them when moved (⌥ to place freely); arrow, open arrow, inhibition (⊣), dot and diamond ends.
+- **Connectors**: straight, curved (drag the ◆ handle) or elbow, with optional text labels (double-click an arrow). Ends dropped on a shape's edge are pinned to that spot and follow the shape; ends dropped on small objects (icons, labels) attach to the whole object; lines drawn over large shapes stay free (⌥ always places freely). Dragging an arrow on its own detaches it. Ends: arrow, open arrow, inhibition (⊣), dot, diamond.
 - **Brushes (B)**: draw freehand and get a lipid bilayer, lipid monolayer, DNA double helix or bead filament along the path. Closing the loop makes a cell membrane. Reshape by dragging points, add points from the ○ midpoints, ⌥-click to delete; recolour heads/tails, strands and bases; "Make oval". Any icon can also be repeated along a path ("Repeat along a path").
 - **Templates**: a gallery of starter figures (cell signalling, membrane transport, activation/inhibition, graphical abstract) built from Pucklet's own shapes and brushes, plus **My templates**: select anything and save it for reuse (stored on your computer).
 - **Smart protocol & timeline builders**: type one step or event per line ("Day 7: Start treatment") and Pucklet lays out numbered markers, labels and connected arrows. Change the steps, direction (across/down), numbering or colour at any time from the right panel and the group rebuilds itself.
+- **Pages**: a file can hold several pages (figures, slides, supplementary panels) — add, duplicate, rename, reorder and delete from the bar under the canvas. PDF and PowerPoint export all pages at once.
+- **View**: rulers (⇧R), grid (⌘') with optional snap-to-grid, and a keyboard shortcut sheet (?).
 - **Multi-panel figures**: one-click layouts (2, 3, 2×2, 3×2, large + small…) with panel letters in A / a / (a) / A. / a) style, plus "Re-letter panels" to renumber in reading order after you rearrange.
-- **Text**: rich text with bold/italic/underline/colour, super/subscript (⇧⌘= / ⌘=), Greek & symbol palette, alignment and line height.
-- **Icons**: searchable library, filter by library and category, drag or click to place, recolour per colour layer, flip, "select all copies".
+- **Text**: click with the Text tool for a box that grows, or drag to make a fixed-width box that wraps (side handles change the width). Rich text with bold/italic/underline/colour, super/subscript (⇧⌘= / ⌘=), Greek & symbol palette, alignment and line height.
+- **Icons & images**: ~5,100 icons from Bioicons, Reactome and PhyloPic — search (best matches first), filter by library and category, drag or click to place, recolour per colour layer, flip, crop (double-click; rectangle, rounded or circle shapes), "select all copies".
+- **Shapes**: gradient fills (linear or radial) as well as solid.
 - **Import**: SVG, PNG, JPG, GIF, WebP via dialog, drag-and-drop or paste.
 - **Copy/paste**: copied objects go to the clipboard as SVG (paste into Inkscape/Illustrator/text editors); paste SVG markup or images from other apps.
 - **Export**: SVG, vector PDF (desktop), PNG at 72–1200 dpi with a correct DPI tag, and **PowerPoint** (text, shapes and straight arrows stay editable; icons and brushes become 300 dpi pictures). Transparent background option and a copyable credit line; PPTX puts credits in the speaker notes.
@@ -92,7 +96,7 @@ research/            BioRender feature, UX and community research
 
 ## Known gaps / next steps
 
-- **Icons**: the Bioicons pack is ~105 MB after SVGO (much of it detailed Servier artwork). More libraries to add: Servier (direct), NIH BioArt, Reactome, PhyloPic. AI-assisted or paper-sourced icons are on the back burner.
+- **Icons**: Bioicons is ~105 MB after SVGO (much of it detailed Servier artwork); Reactome adds ~17 MB, PhyloPic <1 MB. NIH BioArt has no public API and is PNG-only, so it isn't included yet. See `research/icon-sourcing.md` for paper-sourced and AI-generated icon options.
 - **More templates**: e.g. immune cell interactions, CRISPR workflow, organ-level figures. They're easy to add in `src/renderer/src/library/templates.ts`.
 - **Editing polish**: editing rotated text in place, brush colour presets.
 - **Packaging**: the Mac app is unsigned, so macOS warns on first launch (right-click the app → Open). Signing/notarisation needs an Apple Developer ID ($99/year); Windows signing needs a code-signing certificate. Auto-update is not set up.

@@ -7,8 +7,9 @@ import { center } from '../model/geometry'
 import type { AlignMode } from '../model/ops'
 import { align, distribute } from '../model/ops'
 import { withTextSize } from '../model/transform'
-import type { BoxObj, BrushKind, BrushObj, Cap, Dash, FigObject, GroupObj, IconObj, Id, LineObj, SmartSpec, TextObj } from '../model/types'
+import type { BoxObj, BrushKind, BrushObj, Cap, Dash, EllipseObj, FigObject, Gradient, GroupObj, IconObj, Id, LineObj, RectObj, SmartSpec, TextObj } from '../model/types'
 import { regenerate } from '../model/smart'
+import { resetCrop } from '../model/crop'
 import { BRUSH_PRESETS, circlePoints, presetFor } from '../model/brush'
 import { makeBrush } from '../model/defaults'
 import { rectOfPoints } from '../model/geometry'
@@ -79,6 +80,58 @@ const CAPS: { value: Cap; label: string }[] = [
 
 function same<T>(values: T[]): T | null {
   return values.length && values.every((v) => v === values[0]) ? values[0] : null
+}
+
+function FillFields({ shapes }: { shapes: (RectObj | EllipseObj)[] }) {
+  const ids = shapes.map((o) => o.id)
+  const grads = shapes.map((o) => o.gradient)
+  const g = grads.every((x) => x) ? grads[0]! : null
+  const mode = grads.every((x) => x) ? 'gradient' : grads.every((x) => !x) ? 'solid' : null
+  const setGrad = (patch: Partial<Gradient>) => updateEach<RectObj | EllipseObj>(ids, (o) => (o.gradient ? { gradient: { ...o.gradient, ...patch } } : null))
+  return (
+    <>
+      <Row label="Fill">
+        <Segmented
+          value={mode}
+          options={[
+            { value: 'solid', label: 'Solid' },
+            { value: 'gradient', label: 'Gradient' }
+          ]}
+          onChange={(m) =>
+            updateEach<RectObj | EllipseObj>(ids, (o) =>
+              m === 'solid'
+                ? { gradient: undefined }
+                : { gradient: o.gradient ?? { kind: 'linear', from: o.fill === 'none' ? '#ffffff' : o.fill, to: '#0072b2', angle: 90 } }
+            )
+          }
+        />
+        {mode === 'solid' && <ColorField value={same(shapes.map((o) => o.fill)) ?? '#ffffff'} allowNone onChange={(fill) => updateEach(ids, () => ({ fill }))} />}
+      </Row>
+      {g && (
+        <>
+          <Row label="Colours">
+            <ColorField value={g.from} title="Start colour" onChange={(from) => setGrad({ from })} />
+            <span className="muted">→</span>
+            <ColorField value={g.to} title="End colour" onChange={(to) => setGrad({ to })} />
+            <IconButton title="Swap colours" onClick={() => setGrad({ from: g.to, to: g.from })}>
+              ⇄
+            </IconButton>
+          </Row>
+          <Row label="Type">
+            <Segmented
+              value={g.kind}
+              options={[
+                { value: 'linear', label: 'Linear' },
+                { value: 'radial', label: 'Radial' }
+              ]}
+              onChange={(kind) => setGrad({ kind })}
+            />
+            {g.kind === 'linear' && <NumberField title="∠" value={g.angle} suffix="°" step={15} onChange={(angle) => setGrad({ angle: ((angle % 360) + 360) % 360 })} />}
+          </Row>
+        </>
+      )}
+    </>
+  )
 }
 
 function StrokeFields({ objs }: { objs: (BoxObj | LineObj)[] }) {
@@ -213,6 +266,19 @@ function TextFields({ texts }: { texts: TextObj[] }) {
         />
         <NumberField title="↕" value={same(texts.map((t) => t.lineHeight))} min={0.5} max={4} step={0.05} precision={2} onChange={(lineHeight) => updateText(ids, () => ({ lineHeight }))} />
       </Row>
+      <Row label="Width">
+        <Segmented
+          value={texts.every((t) => t.wrap) ? 'fixed' : texts.every((t) => !t.wrap) ? 'auto' : null}
+          options={[
+            { value: 'auto', label: 'Auto', title: 'The box grows to fit each line' },
+            { value: 'fixed', label: 'Wrap', title: 'Text wraps inside a fixed width' }
+          ]}
+          onChange={(v) => updateText(ids, (t) => ({ wrap: v === 'fixed' ? t.wrap ?? Math.max(60, t.w) : undefined }))}
+        />
+        {texts.every((t) => t.wrap) && (
+          <NumberField value={same(texts.map((t) => t.wrap ?? 0))} min={20} max={5000} suffix="px" onChange={(wrap) => updateText(ids, () => ({ wrap }))} />
+        )}
+      </Row>
       <div className="symbols" title={editing ? 'Insert symbol' : 'Double-click a text box to insert symbols'}>
         {SYMBOLS.map((c) => (
           <button key={c} disabled={!editing} data-keep-text-focus onMouseDown={(e) => e.preventDefault()} onClick={() => exec('insertText', c)}>
@@ -221,6 +287,35 @@ function TextFields({ texts }: { texts: TextObj[] }) {
         ))}
       </div>
     </Section>
+  )
+}
+
+function CropControls({ icon }: { icon: IconObj }) {
+  const cropping = useEditor((s) => s.cropping === icon.id)
+  return (
+    <div className="crop-controls">
+      <Row label="Crop">
+        <button className={cropping ? 'on-btn' : ''} onClick={() => useEditor.getState().set({ cropping: cropping ? null : icon.id })} title="Drag the handles to crop; drag inside to reposition. Enter or Esc when done.">
+          {cropping ? 'Done' : 'Crop…'}
+        </button>
+        {icon.crop && (
+          <button className="link" onClick={() => updateEach<IconObj>([icon.id], (i) => resetCrop(i))}>
+            Reset
+          </button>
+        )}
+      </Row>
+      <Row label="Shape">
+        <Segmented
+          value={icon.cropShape ?? 'rect'}
+          options={[
+            { value: 'rect', label: '▭', title: 'Rectangle' },
+            { value: 'rounded', label: '▢', title: 'Rounded' },
+            { value: 'ellipse', label: '◯', title: 'Circle / ellipse' }
+          ]}
+          onChange={(cropShape) => updateEach<IconObj>([icon.id], () => ({ cropShape: cropShape === 'rect' ? undefined : cropShape }))}
+        />
+      </Row>
+    </div>
   )
 }
 
@@ -260,6 +355,7 @@ function IconFields({ icons, snap }: { icons: IconObj[]; snap: Snapshot }) {
           </button>
         </>
       )}
+      {icons.length === 1 && <CropControls icon={icons[0]} />}
       {asset.kind === 'svg' && icons.length === 1 && (
         <button
           className="wide"
@@ -486,6 +582,20 @@ function LineFields({ lines }: { lines: LineObj[] }) {
           ⇄
         </IconButton>
       </Row>
+      <Row label="Label">
+        <input
+          id="connector-label"
+          className="grow"
+          placeholder="e.g. phosphorylation"
+          value={same(lines.map((l) => l.label ?? '')) ?? ''}
+          onFocus={() => useEditor.getState().doc.beginGesture()}
+          onBlur={() => useEditor.getState().doc.endGesture()}
+          onChange={(e) => updateEach<LineObj>(ids, () => ({ label: e.target.value || undefined }))}
+        />
+        {lines.some((l) => l.label) && (
+          <NumberField value={same(lines.map((l) => l.labelSize ?? 14))} min={6} max={120} suffix="pt" onChange={(labelSize) => updateEach<LineObj>(ids, () => ({ labelSize }))} />
+        )}
+      </Row>
       <Row label="Gap">
         <NumberField value={same(lines.map((l) => l.padding))} min={0} max={200} suffix="px" title="" onChange={(padding) => updateEach<LineObj>(ids, () => ({ padding }))} />
       </Row>
@@ -644,9 +754,7 @@ export function PropertiesPanel() {
           {single && isBoxObj(single) && <GeometryFields o={single} />}
           {shapes.length > 0 && (
             <Section title={shapes.length === objs.length ? 'Style' : 'Shape style'}>
-              <Row label="Fill">
-                <ColorField value={same(shapes.map((o) => o.fill)) ?? '#ffffff'} allowNone onChange={(fill) => updateEach(shapes.map((o) => o.id), () => ({ fill }))} />
-              </Row>
+              <FillFields shapes={shapes} />
               <StrokeFields objs={shapes} />
               {shapes.every((s) => s.type === 'rect') && (
                 <Row label="Corners">

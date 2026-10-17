@@ -1,6 +1,6 @@
 import type { Snapshot } from './doc'
 import type { Pt } from './geometry'
-import { center, normalizeAngle, rotate } from './geometry'
+import { center, normalizeAngle, resolveLine, rotate } from './geometry'
 import type { FigObject, Id, LineObj, TextObj } from './types'
 import { isBoxObj } from './types'
 import { layoutText } from '../text/layout'
@@ -27,16 +27,18 @@ const movePt = (p: { x: number; y: number }, dx: number, dy: number) => ({ ...p,
 
 export function translate(snap: Snapshot, ids: Iterable<Id>, dx: number, dy: number): Changes {
   const out: Changes = new Map()
-  for (const o of leaves(snap, ids)) {
+  const moving = leaves(snap, ids)
+  const movingIds = new Set(moving.map((o) => o.id))
+  for (const o of moving) {
     if (o.type === 'brush') {
       out.set(o.id, { ...o, points: o.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) })
     } else if (o.type === 'line') {
-      // Bound ends follow their target; only free ends move with the line.
-      out.set(o.id, {
-        ...o,
-        start: o.start.bind ? o.start : movePt(o.start, dx, dy),
-        end: o.end.bind ? o.end : movePt(o.end, dx, dy)
-      })
+      // Ends attached to objects that move too stay attached; ends attached to objects that
+      // stay put are detached, so dragging a connector moves the whole connector.
+      const g = resolveLine(o, snap)
+      const end = (e: LineObj['start'], p: { x: number; y: number }) =>
+        !e.bind ? movePt(e, dx, dy) : movingIds.has(e.bind) ? e : { x: p.x + dx, y: p.y + dy }
+      out.set(o.id, { ...o, start: end(o.start, g.p1), end: end(o.end, g.p2) })
     } else if (isBoxObj(o)) {
       out.set(o.id, { ...o, x: o.x + dx, y: o.y + dy })
     }
@@ -72,7 +74,7 @@ export function scaleAbout(snap: Snapshot, ids: Iterable<Id>, anchor: Pt, sx: nu
     const c = sp(center(o))
     if (o.type === 'text') {
       const fontSize = Math.max(1, Math.round(o.fontSize * Math.sqrt(Math.abs(sx * sy)) * 10) / 10)
-      const t = withTextSize({ ...o, fontSize })
+      const t = withTextSize({ ...o, fontSize, ...(o.wrap ? { wrap: o.wrap * Math.abs(sx) } : {}) })
       out.set(o.id, { ...t, x: c.x - t.w / 2, y: c.y - t.h / 2 })
       continue
     }

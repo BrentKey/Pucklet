@@ -41,15 +41,26 @@ export interface StrokeStyle {
   dash: Dash
 }
 
+export interface Gradient {
+  kind: 'linear' | 'radial'
+  from: Color
+  to: Color
+  /** Linear only: direction in degrees (0 = left to right, 90 = top to bottom). */
+  angle: number
+}
+
 export interface RectObj extends BaseObj, Box, StrokeStyle {
   type: 'rect'
   fill: Color
+  /** When set, replaces the solid fill. */
+  gradient?: Gradient
   radius: number
 }
 
 export interface EllipseObj extends BaseObj, Box, StrokeStyle {
   type: 'ellipse'
   fill: Color
+  gradient?: Gradient
 }
 
 export interface TextRun {
@@ -71,6 +82,8 @@ export interface TextObj extends BaseObj, Box {
   lineHeight: number
   color: Color
   align: 'left' | 'center' | 'right'
+  /** Fixed box width that text wraps within; unset = the box grows to fit each line. */
+  wrap?: number
 }
 
 /** An SVG icon or raster image placed from an asset. */
@@ -81,6 +94,10 @@ export interface IconObj extends BaseObj, Box {
   flipY: boolean
   /** Original color (as listed in the asset's palette) -> replacement color. SVG assets only. */
   recolor: Record<string, Color>
+  /** Visible part of the source, in 0–1 coordinates of the whole image. Unset = everything. */
+  crop?: { x: number; y: number; w: number; h: number }
+  /** Outline the image is clipped to. */
+  cropShape?: 'rect' | 'rounded' | 'ellipse'
 }
 
 export interface Endpoint {
@@ -88,6 +105,12 @@ export interface Endpoint {
   x: number
   y: number
   bind?: Id
+  /**
+   * Where on the bound object's outline this end is pinned, in the object's own 0–1 box
+   * coordinates. Without an anchor, a bound end aims at the object's centre and slides around
+   * its outline to face the other end (used for small objects such as icons and step markers).
+   */
+  anchor?: { x: number; y: number }
 }
 
 export interface LineObj extends BaseObj, StrokeStyle {
@@ -101,6 +124,9 @@ export interface LineObj extends BaseObj, StrokeStyle {
   endCap: Cap
   /** Gap kept between a bound endpoint and its target's outline. */
   padding: number
+  /** Optional text shown at the middle of the connector (e.g. "phosphorylation"). */
+  label?: string
+  labelSize?: number
 }
 
 export type BrushKind = 'bilayer' | 'monolayer' | 'dna' | 'beads' | 'icon'

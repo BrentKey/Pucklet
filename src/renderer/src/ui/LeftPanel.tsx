@@ -89,9 +89,17 @@ function Library() {
   const inPack = packFilter === 'all' ? all : all.filter((i) => i.pack.id === packFilter)
   const categories = useMemo(() => [...new Set(inPack.map((i) => i.icon.category))].sort(), [inPack])
   const terms = query.toLowerCase().split(/[\s,]+/).filter(Boolean)
-  const results = inPack.filter(
-    (i) => (category === 'all' || i.icon.category === category) && terms.every((t) => i.haystack.includes(t))
-  )
+  const results = useMemo(() => {
+    const hits = inPack.filter((i) => (category === 'all' || i.icon.category === category) && terms.every((t) => i.haystack.includes(t)))
+    if (!terms.length) return hits
+    // Best matches first: name starts with the query, then name contains it, then other fields.
+    const score = (i: (typeof hits)[number]) => {
+      const name = i.icon.name.toLowerCase()
+      return terms.reduce((s, t) => s + (name.startsWith(t) ? 3 : name.split(/[\s(_-]+/).some((w) => w.startsWith(t)) ? 2 : name.includes(t) ? 1 : 0), 0)
+    }
+    return hits.map((i) => ({ i, s: score(i) })).sort((a, b) => b.s - a.s).map((x) => x.i)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inPack, category, query])
 
   useEffect(() => setLimit(PAGE), [query, packFilter, category])
 

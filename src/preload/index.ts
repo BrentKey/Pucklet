@@ -8,7 +8,7 @@ const api = {
     ipcRenderer.invoke('file:save', args),
   importFiles: () => ipcRenderer.invoke('file:import'),
   exportFile: (args: { suggestedName: string; data: Uint8Array }) => ipcRenderer.invoke('file:export', args),
-  svgToPdf: (args: { svg: string; widthIn: number; heightIn: number }) => ipcRenderer.invoke('export:pdf', args),
+  svgToPdf: (pages: { svg: string; widthIn: number; heightIn: number }[]) => ipcRenderer.invoke('export:pdf', pages),
   readUserData: (name: string) => ipcRenderer.invoke('userdata:read', name),
   writeUserData: (name: string, text: string) => ipcRenderer.invoke('userdata:write', name, text),
   setTitle: (title: string) => ipcRenderer.invoke('window:set-title', title),
