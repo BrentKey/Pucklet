@@ -1,5 +1,6 @@
 import type { Box, Cap, FigObject, Id, LineObj } from './types'
 import { isBoxObj } from './types'
+import { flattenPath } from './brush'
 
 export interface Pt {
   x: number
@@ -256,6 +257,11 @@ export function objectBounds(o: FigObject, scene: Lookup): Rect | null {
   if (o.type === 'line') {
     const g = resolveLine(o, scene)
     return rectOfPoints(g.pts)
+  }
+  if (o.type === 'brush') {
+    const r = rectOfPoints(flattenPath(o.points, o.closed, o.smooth))
+    const pad = o.thickness / 2
+    return { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }
   }
   return unionRects(
     scene

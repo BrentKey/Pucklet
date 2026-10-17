@@ -4,7 +4,7 @@ import type { Pt } from '../model/geometry'
 import type { Asset, AssetSource } from '../model/types'
 import { useEditor } from '../state/editor'
 
-export const LIBRARY_DRAG_TYPE = 'application/x-biofig-icon'
+export const LIBRARY_DRAG_TYPE = 'application/x-pucklet-icon'
 
 export interface IconEntry {
   id: string

@@ -1,8 +1,8 @@
 {
-  "name": "biofig",
-  "productName": "BioFig",
+  "name": "pucklet",
+  "productName": "Pucklet",
   "version": "0.1.0",
-  "description": "Open-source desktop app for making clean scientific figures (working title).",
+  "description": "Open-source desktop app for making clean scientific figures.",
   "license": "MPL-2.0",
   "private": true,
   "type": "module",
@@ -20,15 +20,15 @@
     "icons": "node scripts/icons-bioicons.mjs"
   },
   "build": {
-    "appId": "org.biofig.app",
-    "productName": "BioFig",
+    "appId": "org.pucklet.app",
+    "productName": "Pucklet",
     "files": [
       "out/**/*"
     ],
     "fileAssociations": [
       {
-        "ext": "biofig",
-        "name": "BioFig Figure",
+        "ext": "pucklet",
+        "name": "Pucklet Figure",
         "role": "Editor"
       }
     ],
@@ -43,6 +43,7 @@
     "dompurify": "^3.4.17",
     "fflate": "^0.8.3",
     "fractional-indexing": "^4.0.0",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "yjs": "^13.6.33",
@@ -56,6 +57,7 @@
     "electron": "^44.9.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0",
+    "svgo": "^4.1.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"

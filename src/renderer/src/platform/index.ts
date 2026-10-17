@@ -37,7 +37,7 @@ interface NativeApi {
 
 declare global {
   interface Window {
-    biofigNative?: NativeApi
+    puckletNative?: NativeApi
   }
 }
 
@@ -83,7 +83,7 @@ function download(data: Uint8Array, name: string): void {
 function webPlatform(): Platform {
   return {
     kind: 'web',
-    openFile: async () => (await pickFiles('.biofig', false))[0] ?? null,
+    openFile: async () => (await pickFiles('.pucklet', false))[0] ?? null,
     saveFile: async (data, suggestedName) => {
       download(data, suggestedName)
       return { name: suggestedName }
@@ -102,4 +102,4 @@ function webPlatform(): Platform {
   }
 }
 
-export const platform: Platform = window.biofigNative ? electronPlatform(window.biofigNative) : webPlatform()
+export const platform: Platform = window.puckletNative ? electronPlatform(window.puckletNative) : webPlatform()

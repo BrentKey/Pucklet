@@ -3,17 +3,17 @@ import type { DocData } from './doc'
 import { DEFAULT_META } from './doc'
 import type { Asset, FigObject } from './types'
 
-// A .biofig file is a zip so it stays readable by other tools:
+// A .pucklet file is a zip so it stays readable by other tools:
 //   document.json     canvas settings + every object (see model/types.ts)
 //   assets.json       asset records (name, size, palette, source/licence), without the bytes
 //   assets/<id>.svg   SVG assets, as-is
 //   assets/<id>.png…  raster assets
 //   attributions.json credits for every third-party asset used, ready to cite
 
-export const FORMAT = 'biofig'
+export const FORMAT = 'pucklet'
 export const SCHEMA_VERSION = 1
 
-const KNOWN_TYPES = new Set(['rect', 'ellipse', 'text', 'icon', 'line', 'group'])
+const KNOWN_TYPES = new Set(['rect', 'ellipse', 'text', 'icon', 'line', 'brush', 'group'])
 const MIME_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
 
 export class FileFormatError extends Error {}
@@ -40,7 +40,7 @@ export function attributionsFor(assets: Asset[]): { name: string; library: strin
 }
 
 export function serialize(data: DocData, thumbnailPng?: Uint8Array): Uint8Array {
-  const usedAssets = new Set(data.objects.flatMap((o) => (o.type === 'icon' ? [o.assetId] : [])))
+  const usedAssets = new Set(data.objects.flatMap((o) => (o.type === 'icon' || (o.type === 'brush' && o.assetId) ? [o.assetId!] : [])))
   const assets = data.assets.filter((a) => usedAssets.has(a.id))
   const files: Record<string, Uint8Array> = {}
   const records = assets.map((a) => {
@@ -75,23 +75,26 @@ export function validObject(o: unknown): o is FigObject {
     return ok(r.start) && ok(r.end)
   }
   if (r.type === 'group') return true
+  if (r.type === 'brush') {
+    return Array.isArray(r.points) && (r.points as unknown[]).every((p) => !!p && finite((p as { x: unknown }).x) && finite((p as { y: unknown }).y))
+  }
   return finite(r.x) && finite(r.y) && finite(r.w) && finite(r.h)
 }
 
-/** Parses a .biofig file. Asset contents still need re-sanitizing by the caller. */
+/** Parses a .pucklet file. Asset contents still need re-sanitizing by the caller. */
 export function deserialize(bytes: Uint8Array): DocData {
   let files: Record<string, Uint8Array>
   try {
     files = unzipSync(bytes)
   } catch {
-    throw new FileFormatError('This file is not a BioFig figure (not a zip archive).')
+    throw new FileFormatError('This file is not a Pucklet figure (not a zip archive).')
   }
   const docFile = files['document.json']
   if (!docFile) throw new FileFormatError('This file is missing document.json.')
   const doc = JSON.parse(strFromU8(docFile))
-  if (doc.format !== FORMAT) throw new FileFormatError('This file is not a BioFig figure.')
+  if (doc.format !== FORMAT) throw new FileFormatError('This file is not a Pucklet figure.')
   if (doc.schemaVersion > SCHEMA_VERSION) {
-    throw new FileFormatError('This figure was saved by a newer version of BioFig. Please update the app.')
+    throw new FileFormatError('This figure was saved by a newer version of Pucklet. Please update the app.')
   }
   const records: (Omit<Asset, 'data'> & { file: string; mime?: string })[] = files['assets.json']
     ? JSON.parse(strFromU8(files['assets.json']))

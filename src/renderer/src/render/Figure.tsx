@@ -4,6 +4,7 @@ import type { Snapshot } from '../model/doc'
 import { capPath, center, resolveLine } from '../model/geometry'
 import type { Asset, Dash, EllipseObj, FigObject, IconObj, LineObj, RectObj, TextObj } from '../model/types'
 import { layoutText } from '../text/layout'
+import { BrushView } from './Brush'
 
 // The single renderer for figures. The canvas renders it live (mode 'canvas'); export renders
 // the same components to a static SVG string (mode 'export'), so what you see is what you get.
@@ -40,7 +41,8 @@ function RectView({ o, mode }: { o: RectObj; mode: RenderMode }) {
       strokeLinecap={o.dash === 'dotted' ? 'round' : undefined}
       opacity={o.opacity < 1 ? o.opacity : undefined}
       transform={rotation(o)}
-      pointerEvents={mode === 'canvas' ? 'visible' : undefined}
+      // Panel frames are only grabbable by their outline so they don't block clicks inside.
+      pointerEvents={mode === 'canvas' ? (o.role === 'panel-frame' ? 'visibleStroke' : 'visible') : undefined}
     />
   )
 }
@@ -187,8 +189,9 @@ const ShapeNode = memo(function ShapeNode({ o, asset, mode }: { o: FigObject; as
 })
 
 export function Node({ o, snap, mode, hidden }: NodeProps) {
-  if (hidden?.has(o.id)) return null
+  if (o.hidden || hidden?.has(o.id)) return null
   if (o.type === 'line') return <LineView o={o} snap={snap} mode={mode} />
+  if (o.type === 'brush') return <BrushView o={o} asset={o.assetId ? snap.assets.get(o.assetId) : undefined} mode={mode} />
   if (o.type === 'group') {
     return (
       <g data-id={mode === 'canvas' ? o.id : undefined} opacity={o.opacity < 1 ? o.opacity : undefined}>

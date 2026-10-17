@@ -31,7 +31,7 @@ function confirmDiscard(): boolean {
 
 export function newFigure(): void {
   if (!confirmDiscard()) return
-  S().loadDoc(new FigureDoc(), 'Untitled.biofig')
+  S().loadDoc(new FigureDoc(), 'Untitled.pucklet')
 }
 
 export async function openFigure(): Promise<void> {
@@ -58,7 +58,7 @@ export async function saveFigure(saveAs = false): Promise<boolean> {
   const s = S()
   if (s.editingText) (document.activeElement as HTMLElement | null)?.blur()
   const bytes = serialize(S().doc.toData())
-  const res = await platform.saveFile(bytes, s.fileName.endsWith('.biofig') ? s.fileName : s.fileName + '.biofig', saveAs ? undefined : s.filePath)
+  const res = await platform.saveFile(bytes, s.fileName.endsWith('.pucklet') ? s.fileName : s.fileName + '.pucklet', saveAs ? undefined : s.filePath)
   if (!res) return false
   S().markSaved(res.name, res.path)
   S().showToast(`Saved ${res.name}`)
@@ -107,7 +107,7 @@ export function duplicate(): void {
 export function selectAll(): void {
   if (isTyping()) return void document.execCommand('selectAll')
   const s = S()
-  s.select(s.doc.snapshot().children(s.context).filter((o) => !o.locked).map((o) => o.id))
+  s.select(s.doc.snapshot().children(s.context).filter((o) => !o.locked && !o.hidden).map((o) => o.id))
 }
 
 export function nudge(dx: number, dy: number): void {
@@ -153,7 +153,7 @@ export function escapeKey(): void {
 // Clipboard. The clipboard text is an SVG of the selection (so pasting into Inkscape,
 // Illustrator or a text editor gives something useful) with our own objects embedded.
 
-const CLIP_ID = 'biofig-clip'
+const CLIP_ID = 'pucklet-clip'
 
 function toBase64(bytes: Uint8Array): string {
   let bin = ''
@@ -286,7 +286,7 @@ const MOD_KEYS: Record<string, string> = {
   '=': 'view.zoomIn', '+': 'view.zoomIn', '-': 'view.zoomOut', '0': 'view.fit', '1': 'view.actual'
 }
 
-const TOOL_KEYS: Record<string, Tool> = { v: 'select', h: 'hand', r: 'rect', o: 'ellipse', e: 'ellipse', t: 'text', l: 'line', a: 'arrow' }
+const TOOL_KEYS: Record<string, Tool> = { v: 'select', h: 'hand', r: 'rect', o: 'ellipse', e: 'ellipse', t: 'text', l: 'line', a: 'arrow', b: 'brush' }
 
 export function installKeyboard(): () => void {
   const onKey = (e: KeyboardEvent) => {

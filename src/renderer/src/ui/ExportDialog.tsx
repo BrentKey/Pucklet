@@ -4,7 +4,7 @@ import { platform } from '../platform'
 import { useEditor, useSnapshot } from '../state/editor'
 import { Segmented } from './controls'
 
-type Format = 'png' | 'svg' | 'pdf'
+type Format = 'png' | 'svg' | 'pdf' | 'pptx'
 
 const DPIS = [72, 150, 300, 600, 1200]
 
@@ -24,7 +24,7 @@ export function ExportDialog() {
   const pw = Math.round(W * scale)
   const ph = Math.round(H * scale)
   const tooBig = format === 'png' && (pw > MAX_SIDE || ph > MAX_SIDE || pw * ph > MAX_PIXELS)
-  const base = fileName.replace(/\.biofig$/, '')
+  const base = fileName.replace(/\.pucklet$/, '')
 
   const run = async () => {
     setBusy(true)
@@ -33,6 +33,7 @@ export function ExportDialog() {
       const svg = figureSvg(snap, { transparent: format !== 'pdf' && transparent })
       let bytes: Uint8Array
       if (format === 'svg') bytes = new TextEncoder().encode(svg)
+      else if (format === 'pptx') bytes = await (await import('../export/pptx')).figureToPptx(snap, { transparent })
       else if (format === 'png') bytes = await svgToPng(svg, W, H, scale, dpi)
       else bytes = await platform.svgToPdf!(svg, W / 96, H / 96)
       if (await platform.exportFile(bytes, `${base}.${format}`)) {
@@ -58,13 +59,16 @@ export function ExportDialog() {
             options={[
               { value: 'png', label: 'PNG' },
               { value: 'svg', label: 'SVG (vector)' },
-              { value: 'pdf', label: 'PDF (vector)', title: platform.svgToPdf ? undefined : 'Available in the desktop app' }
+              { value: 'pdf', label: 'PDF (vector)', title: platform.svgToPdf ? undefined : 'Available in the desktop app' },
+              { value: 'pptx', label: 'PowerPoint' }
             ]}
           />
           <p className="muted small">
             {format === 'png' && 'Raster image for slides, documents and journal uploads.'}
             {format === 'svg' && 'Fully editable vectors for Illustrator, Inkscape, Affinity or the web.'}
             {format === 'pdf' && 'Vector PDF, accepted by most journals and print shops.'}
+            {format === 'pptx' &&
+              'One slide the size of your canvas. Text, shapes and straight arrows stay editable; icons and brushes become 300 dpi pictures. Credits go in the speaker notes.'}
           </p>
         </div>
 

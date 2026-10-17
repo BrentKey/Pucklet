@@ -371,7 +371,7 @@ For an editor whose core value is rendering and export fidelity, Electron remove
 |---|---|
 | **Document model** | Yjs `Y.Doc` from day one (local only at first). `Y.UndoManager` for undo. Stable UUIDs, fractional-index z-order, flat object map. Collaboration via `y-websocket`/Hocuspocus becomes an add-on, not a rewrite. |
 | **Rich text** | TipTap or Lexical overlay. Stored as spans, rendered to SVG `<text>/<tspan>` (sub/superscript, Greek letters). MathJax for LaTeX later. |
-| **File format** | Open, zipped `.biofig` (name TBD) containing `document.json` (versioned schema), content-addressed `assets/*.svg`, `attributions.json` and a thumbnail. Publish the JSON Schema. |
+| **File format** | Open, zipped `.pucklet` (name TBD) containing `document.json` (versioned schema), content-addressed `assets/*.svg`, `attributions.json` and a thumbnail. Publish the JSON Schema. |
 | **SVG export** | Serialize the DOM. Option to convert text to outlines. |
 | **PNG/TIFF export** | `@resvg/resvg-js`: deterministic, any DPI, identical on every OS and on the web. |
 | **PDF export** | Electron `printToPDF` (true vector). Use svg2pdf.js + jsPDF for web. |

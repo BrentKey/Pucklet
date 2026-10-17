@@ -623,7 +623,8 @@ code {
 .canvas-wrap.tool-rect,
 .canvas-wrap.tool-ellipse,
 .canvas-wrap.tool-line,
-.canvas-wrap.tool-arrow {
+.canvas-wrap.tool-arrow,
+.canvas-wrap.tool-brush {
   cursor: crosshair;
 }
 .canvas-wrap.tool-text {
@@ -714,4 +715,141 @@ code {
   color: #fff;
   border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* ---------- Layers ---------- */
+
+.layers {
+  padding: 6px 0;
+}
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding-right: 6px;
+  cursor: default;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+}
+.layer-row:hover {
+  background: #f5f6f8;
+}
+.layer-row.on {
+  background: var(--accent-soft);
+}
+.layer-row.hidden .layer-name {
+  opacity: 0.45;
+}
+.layer-row.drop-before {
+  border-top-color: var(--accent);
+}
+.layer-row.drop-after {
+  border-bottom-color: var(--accent);
+}
+.layer-row.drop-inside {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.twisty {
+  width: 16px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.twisty.blank {
+  pointer-events: none;
+}
+.layer-kind {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #94a3b8;
+}
+.kind-text {
+  background: #64748b;
+}
+.kind-icon {
+  background: #10b981;
+}
+.kind-line {
+  height: 2px;
+  background: #334155;
+}
+.kind-ellipse {
+  border-radius: 50%;
+  background: #f59e0b;
+}
+.kind-rect {
+  background: #60a5fa;
+}
+.kind-group {
+  background: none;
+  border: 1.5px dashed #8b5cf6;
+}
+.layer-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.layer-rename {
+  flex: 1;
+  height: 24px !important;
+}
+.layer-toggle {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #b0b6c0;
+  visibility: hidden;
+}
+.layer-row:hover .layer-toggle,
+.layer-toggle.active {
+  visibility: visible;
+}
+.layer-toggle.active {
+  color: #475569;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.layout-btn {
+  height: 38px;
+  padding: 0;
+  border-color: var(--border);
+}
+.layout-btn:hover rect + rect,
+.layout-btn:hover rect:not(:first-child) {
+  fill: var(--accent);
+}
+.btn-row button {
+  font-size: 12px;
+}
+
+.brush-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 10px;
+}
+.brush-color {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.panel-section .check {
+  margin-bottom: 6px;
 }

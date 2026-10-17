@@ -28,7 +28,9 @@ const movePt = (p: { x: number; y: number }, dx: number, dy: number) => ({ ...p,
 export function translate(snap: Snapshot, ids: Iterable<Id>, dx: number, dy: number): Changes {
   const out: Changes = new Map()
   for (const o of leaves(snap, ids)) {
-    if (o.type === 'line') {
+    if (o.type === 'brush') {
+      out.set(o.id, { ...o, points: o.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) })
+    } else if (o.type === 'line') {
       // Bound ends follow their target; only free ends move with the line.
       out.set(o.id, {
         ...o,
@@ -52,6 +54,10 @@ export function scaleAbout(snap: Snapshot, ids: Iterable<Id>, anchor: Pt, sx: nu
   const out: Changes = new Map()
   const sp = (p: Pt) => ({ x: anchor.x + (p.x - anchor.x) * sx, y: anchor.y + (p.y - anchor.y) * sy })
   for (const o of leaves(snap, ids)) {
+    if (o.type === 'brush') {
+      out.set(o.id, { ...o, points: o.points.map(sp) })
+      continue
+    }
     if (o.type === 'line') {
       const s = Math.sqrt(Math.abs(sx * sy))
       out.set(o.id, {
@@ -80,6 +86,10 @@ export function scaleAbout(snap: Snapshot, ids: Iterable<Id>, anchor: Pt, sx: nu
 export function rotateAbout(snap: Snapshot, ids: Iterable<Id>, pivot: Pt, deg: number): Changes {
   const out: Changes = new Map()
   for (const o of leaves(snap, ids)) {
+    if (o.type === 'brush') {
+      out.set(o.id, { ...o, points: o.points.map((p) => rotate(p, deg, pivot)) })
+      continue
+    }
     if (o.type === 'line') {
       const r = (e: LineObj['start']) => (e.bind ? e : { ...e, ...rotate(e, deg, pivot) })
       out.set(o.id, { ...o, start: r(o.start), end: r(o.end) })

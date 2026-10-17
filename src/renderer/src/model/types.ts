@@ -19,6 +19,10 @@ export interface BaseObj {
   parentId?: Id
   name?: string
   locked?: boolean
+  /** Hidden objects are not drawn on the canvas or exported. */
+  hidden?: boolean
+  /** Special meaning for features like multi-panel layouts. */
+  role?: 'panel-label' | 'panel-frame'
   opacity: number
 }
 
@@ -99,12 +103,32 @@ export interface LineObj extends BaseObj, StrokeStyle {
   padding: number
 }
 
+export type BrushKind = 'bilayer' | 'monolayer' | 'dna' | 'beads' | 'icon'
+
+/** A pattern (membrane, DNA, filament, repeated icon) drawn along a path. See model/brush.ts. */
+export interface BrushObj extends BaseObj {
+  type: 'brush'
+  kind: BrushKind
+  points: { x: number; y: number }[]
+  closed: boolean
+  smooth: boolean
+  /** Distance between repeated units along the path. */
+  spacing: number
+  /** Width of the pattern across the path. */
+  thickness: number
+  colors: Color[]
+  /** Mirror the pattern across the path (e.g. which side a monolayer's heads face). */
+  flip: boolean
+  /** kind 'icon': the asset repeated along the path. */
+  assetId?: string
+}
+
 export interface GroupObj extends BaseObj {
   type: 'group'
 }
 
 export type BoxObj = RectObj | EllipseObj | TextObj | IconObj
-export type FigObject = BoxObj | LineObj | GroupObj
+export type FigObject = BoxObj | LineObj | BrushObj | GroupObj
 export type ObjType = FigObject['type']
 
 export interface AssetSource {

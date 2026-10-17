@@ -11,9 +11,10 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { optimize } from 'svgo'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const CACHE = join(ROOT, '.cache')
@@ -86,6 +87,8 @@ async function main() {
   mkdirSync(OUT, { recursive: true })
   const icons = []
   let skipped = 0
+  let bytesIn = 0
+  let bytesOut = 0
   for (const license of LICENSES) {
     const dir = join(iconsDir, license)
     if (!existsSync(dir)) continue
@@ -99,7 +102,17 @@ async function main() {
       const [category, author] = rel
       const outRel = [license, ...rel].join('/')
       mkdirSync(dirname(join(OUT, outRel)), { recursive: true })
-      copyFileSync(file, join(OUT, outRel))
+      const raw = readFileSync(file, 'utf8')
+      bytesIn += raw.length
+      let svg = raw
+      try {
+        // Lossless clean-up: editor metadata, redundant attributes, path precision. Keeps viewBox.
+        svg = optimize(raw, { multipass: true, plugins: ['preset-default'] }).data
+      } catch {
+        /* keep the original if SVGO can't parse it */
+      }
+      bytesOut += svg.length
+      writeFileSync(join(OUT, outRel), svg)
       const authorName = prettyAuthor(author)
       icons.push({
         id: createHash('sha1').update(outRel).digest('hex').slice(0, 12),
@@ -141,7 +154,9 @@ async function main() {
   writeFileSync(indexFile, JSON.stringify(index, null, 1))
 
   const byLicense = icons.reduce((m, i) => ((m[i.license] = (m[i.license] ?? 0) + 1), m), {})
+  const mb = (n) => (n / 1e6).toFixed(1) + ' MB'
   console.log(`Bioicons pack: ${icons.length} icons (${JSON.stringify(byLicense)}), skipped ${skipped} oversized files.`)
+  console.log(`Optimized with SVGO: ${mb(bytesIn)} -> ${mb(bytesOut)}`)
 }
 
 main().catch((e) => {

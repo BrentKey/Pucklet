@@ -7,11 +7,15 @@ import { center } from '../model/geometry'
 import type { AlignMode } from '../model/ops'
 import { align, distribute } from '../model/ops'
 import { withTextSize } from '../model/transform'
-import type { BoxObj, Cap, Dash, FigObject, IconObj, Id, LineObj, TextObj } from '../model/types'
+import type { BoxObj, BrushKind, BrushObj, Cap, Dash, FigObject, IconObj, Id, LineObj, TextObj } from '../model/types'
+import { BRUSH_PRESETS, circlePoints, presetFor } from '../model/brush'
+import { makeBrush } from '../model/defaults'
+import { rectOfPoints } from '../model/geometry'
 import { isBoxObj } from '../model/types'
 import { useEditor, useSnapshot } from '../state/editor'
 import { ColorField, IconButton, NumberField, Row, Section, Segmented } from './controls'
 import { Icon } from './icons'
+import { PanelsSection } from './PanelsSection'
 
 // ---------------------------------------------------------------------------------------
 // Updating helpers
@@ -255,6 +259,33 @@ function IconFields({ icons, snap }: { icons: IconObj[]; snap: Snapshot }) {
           </button>
         </>
       )}
+      {asset.kind === 'svg' && icons.length === 1 && (
+        <button
+          className="wide"
+          title="Create a brush that repeats this icon along a path you can reshape"
+          onClick={() => {
+            const i = icons[0]
+            const doc = useEditor.getState().doc
+            const size = Math.min(i.w, i.h)
+            const brush = {
+              ...makeBrush(doc.snapshot().topZ(doc.snapshot().parentOf(i.id)), 'icon', [{ x: i.x, y: i.y + i.h / 2 }, { x: i.x + size * 6, y: i.y + i.h / 2 }], false),
+              assetId: asset.id,
+              spacing: i.w,
+              thickness: i.h,
+              smooth: true,
+              ...(i.parentId ? { parentId: i.parentId } : {})
+            }
+            // The brush takes the icon's place.
+            doc.transact((tx) => {
+              tx.add({ ...brush, z: i.z })
+              tx.remove(i.id)
+            })
+            useEditor.getState().select([brush.id])
+          }}
+        >
+          Repeat along a path
+        </button>
+      )}
       {asset.source && (
         <p className="credit">
           <strong>{asset.name}</strong>
@@ -263,6 +294,100 @@ function IconFields({ icons, snap }: { icons: IconObj[]; snap: Snapshot }) {
           {asset.source.library} · {licenseLabel(asset.source.license)}
         </p>
       )}
+    </Section>
+  )
+}
+
+function BrushFields({ brushes }: { brushes: BrushObj[] }) {
+  const ids = brushes.map((b) => b.id)
+  const b0 = brushes[0]
+  const sameKind = brushes.every((b) => b.kind === b0.kind)
+  const preset = presetFor(b0.kind)
+  const gesture = { onPointerDown: () => useEditor.getState().doc.beginGesture(), onPointerUp: () => useEditor.getState().doc.endGesture() }
+  return (
+    <Section title="Brush">
+      <Row label="Pattern">
+        <select
+          value={sameKind ? b0.kind : ''}
+          onChange={(e) => {
+            const p = presetFor(e.target.value as BrushKind)
+            if (p.kind === 'icon') return
+            updateEach<BrushObj>(ids, () => ({ kind: p.kind, spacing: p.spacing, thickness: p.thickness, colors: [...p.colors], assetId: undefined }))
+          }}
+        >
+          {!sameKind && <option value="">Mixed</option>}
+          {BRUSH_PRESETS.filter((p) => p.kind !== 'icon' || b0.kind === 'icon').map((p) => (
+            <option key={p.kind} value={p.kind}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </Row>
+      {sameKind && preset.colorNames.length > 0 && (
+        <div className="brush-colors">
+          {preset.colorNames.map((name, i) => (
+            <span key={name} className="brush-color" title={name}>
+              <ColorField
+                value={b0.colors[i] ?? '#999999'}
+                onChange={(c) =>
+                  updateEach<BrushObj>(ids, (b) => {
+                    const colors = b.colors.slice()
+                    colors[i] = c
+                    return { colors }
+                  })
+                }
+              />
+              <span className="small muted">{name}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <Row label={b0.kind === 'dna' ? 'Turn' : 'Spacing'}>
+        <NumberField value={same(brushes.map((b) => b.spacing))} min={2} max={1000} suffix="px" onChange={(spacing) => updateEach<BrushObj>(ids, () => ({ spacing }))} />
+      </Row>
+      <Row label="Width">
+        <input
+          type="range"
+          min={4}
+          max={200}
+          value={same(brushes.map((b) => b.thickness)) ?? 40}
+          {...gesture}
+          onChange={(e) => updateEach<BrushObj>(ids, () => ({ thickness: Number(e.target.value) }))}
+        />
+        <span className="muted small">{same(brushes.map((b) => b.thickness)) ?? '—'}</span>
+      </Row>
+      <div className="btn-row">
+        <label className="check small">
+          <input type="checkbox" checked={b0.closed} onChange={(e) => updateEach<BrushObj>(ids, (b) => (b.points.length > 2 ? { closed: e.target.checked } : null))} />
+          Closed loop
+        </label>
+        <label className="check small">
+          <input type="checkbox" checked={b0.smooth} onChange={(e) => updateEach<BrushObj>(ids, () => ({ smooth: e.target.checked }))} />
+          Smooth
+        </label>
+        {(b0.kind === 'monolayer' || b0.kind === 'dna') && (
+          <label className="check small">
+            <input type="checkbox" checked={b0.flip} onChange={(e) => updateEach<BrushObj>(ids, () => ({ flip: e.target.checked }))} />
+            Flip
+          </label>
+        )}
+      </div>
+      <div className="btn-row">
+        <button
+          title="Turn this brush into a closed oval, e.g. a cell membrane"
+          onClick={() =>
+            updateEach<BrushObj>(ids, (b) => {
+              const r = rectOfPoints(b.points)
+              const rx = Math.max(r.w, 40) / 2
+              const ry = Math.max(r.h, 40) / 2
+              return { points: circlePoints(r.x + r.w / 2, r.y + r.h / 2, rx, ry), closed: true, smooth: true }
+            })
+          }
+        >
+          Make oval
+        </button>
+        <span className="muted small">Drag ● to reshape, ○ to add a point, ⌥-click ● to delete.</span>
+      </div>
     </Section>
   )
 }
@@ -383,6 +508,7 @@ function CanvasFields({ snap }: { snap: Snapshot }) {
           <span className="muted small">{background === 'none' ? 'Transparent' : background}</span>
         </Row>
       </Section>
+      <PanelsSection />
       <Section title="Tips">
         <ul className="tips">
           <li>Drag icons from the left panel, or drop SVG/PNG files on the canvas.</li>
@@ -396,7 +522,7 @@ function CanvasFields({ snap }: { snap: Snapshot }) {
   )
 }
 
-const TYPE_LABEL: Record<FigObject['type'], string> = { rect: 'Rectangle', ellipse: 'Ellipse', text: 'Text', icon: 'Icon', line: 'Connector', group: 'Group' }
+const TYPE_LABEL: Record<FigObject['type'], string> = { rect: 'Rectangle', ellipse: 'Ellipse', text: 'Text', icon: 'Icon', line: 'Connector', brush: 'Brush', group: 'Group' }
 
 export function PropertiesPanel() {
   const snap = useSnapshot()
@@ -420,6 +546,7 @@ export function PropertiesPanel() {
   const texts = objs.filter((o): o is TextObj => o.type === 'text')
   const icons = objs.filter((o): o is IconObj => o.type === 'icon')
   const lines = objs.filter((o): o is LineObj => o.type === 'line')
+  const brushes = objs.filter((o): o is BrushObj => o.type === 'brush')
 
   return (
     <aside className="right-panel">
@@ -475,6 +602,7 @@ export function PropertiesPanel() {
           {texts.length > 0 && <TextFields texts={texts} />}
           {icons.length > 0 && <IconFields icons={icons} snap={live} />}
           {lines.length > 0 && <LineFields lines={lines} />}
+          {brushes.length > 0 && <BrushFields brushes={brushes} />}
           <Section title="Layer">
             <Row label="Opacity">
               <input
@@ -483,6 +611,8 @@ export function PropertiesPanel() {
                 max={1}
                 step={0.05}
                 value={same(objs.map((o) => o.opacity)) ?? 1}
+                onPointerDown={() => useEditor.getState().doc.beginGesture()}
+                onPointerUp={() => useEditor.getState().doc.endGesture()}
                 onChange={(e) => updateEach(ids, () => ({ opacity: Number(e.target.value) }))}
               />
               <span className="muted small">{Math.round((same(objs.map((o) => o.opacity)) ?? 1) * 100)}%</span>

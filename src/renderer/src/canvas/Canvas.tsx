@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { makeEllipse, makeLine, makeRect, makeText } from '../model/defaults'
+import { makeBrush, makeEllipse, makeLine, makeRect, makeText } from '../model/defaults'
+import { simplify } from '../model/brush'
 import type { Snapshot } from '../model/doc'
 import type { Pt, Rect } from '../model/geometry'
 import { boxContains, center, dist, lineAnchors, norm, objectBounds, rectsIntersect, snapAngle, sub } from '../model/geometry'
 import { applyChanges, boundsOf, copyObjects, pasteClip } from '../model/ops'
 import type { Changes, Handle } from '../model/transform'
 import { resizeBox, rotateAbout, scaleAbout, translate, withTextSize } from '../model/transform'
-import type { FigObject, Id, LineObj } from '../model/types'
+import type { BrushObj, FigObject, Id, LineObj } from '../model/types'
 import { isBoxObj } from '../model/types'
 import { SceneContent } from '../render/Figure'
 import { useEditor, useLiveSnapshot, useSnapshot } from '../state/editor'
@@ -24,6 +25,8 @@ type Drag =
   | { kind: 'create'; obj: FigObject; origin: Pt }
   | { kind: 'line-end'; line: LineObj; which: 'start' | 'end'; base: Snapshot; isNew: boolean }
   | { kind: 'bend'; line: LineObj; base: Snapshot }
+  | { kind: 'sketch'; pts: Pt[]; parent: Id | ''; z: string }
+  | { kind: 'brush-point'; brush: BrushObj; index: number }
 
 const SNAP_PX = 6
 const FILTERS = {
@@ -37,6 +40,7 @@ function findBindTarget(snap: Snapshot, p: Pt, exclude: Id, tolerance: number): 
   const order: FigObject[] = []
   const walk = (parent: Id | '') => {
     for (const o of snap.children(parent)) {
+      if (o.hidden) continue
       if (o.type === 'group') walk(o.id)
       else order.push(o)
     }
@@ -44,7 +48,7 @@ function findBindTarget(snap: Snapshot, p: Pt, exclude: Id, tolerance: number): 
   walk('')
   for (let i = order.length - 1; i >= 0; i--) {
     const o = order[i]
-    if (o.id !== exclude && isBoxObj(o) && boxContains(o, p, tolerance)) return o.id
+    if (o.id !== exclude && !o.hidden && isBoxObj(o) && boxContains(o, p, tolerance)) return o.id
   }
   return null
 }
@@ -166,6 +170,20 @@ export function Canvas() {
         drag.current = { kind: 'line-end', line: base.get(ids[0]) as LineObj, which: handle, base, isNew: false }
       } else if (handle === 'bend') {
         drag.current = { kind: 'bend', line: base.get(ids[0]) as LineObj, base }
+      } else if (handle.startsWith('bpt:') || handle.startsWith('bmid:')) {
+        let brush = base.get(ids[0]) as BrushObj
+        let index = Number(handle.split(':')[1])
+        if (handle.startsWith('bmid:')) {
+          // Dragging a midpoint inserts a new point there.
+          index += 1
+          brush = { ...brush, points: [...brush.points.slice(0, index), p, ...brush.points.slice(index)] }
+        } else if (e.altKey && brush.points.length > (brush.closed ? 3 : 2)) {
+          const b2 = { ...brush, points: brush.points.filter((_, i) => i !== index) }
+          s.doc.transact((tx) => tx.put(b2))
+          return
+        }
+        drag.current = { kind: 'brush-point', brush, index }
+        s.set({ drafts: new Map([[brush.id, brush]]) })
       } else {
         drag.current = { kind: 'resize', handle: handle as Handle, ids, base, bounds: boundsOf(base, ids)! }
       }
@@ -188,6 +206,11 @@ export function Canvas() {
         e.preventDefault()
         const obj = withParent(makeText(z, p.x, p.y - 12))
         s.set({ drafts: new Map([[obj.id, obj]]), editingText: obj.id, selection: [obj.id], tool: 'select' })
+        return
+      }
+      case 'brush': {
+        drag.current = { kind: 'sketch', pts: [p], parent, z }
+        s.set({ sketch: [p] })
         return
       }
       case 'line':
@@ -321,7 +344,7 @@ export function Canvas() {
         const snapNow = s.doc.snapshot()
         const hits = snapNow
           .children(s.context)
-          .filter((o) => !o.locked)
+          .filter((o) => !o.locked && !o.hidden)
           .filter((o) => {
             const b = objectBounds(o, snapNow)
             return b && rectsIntersect(b, r)
@@ -362,6 +385,21 @@ export function Canvas() {
         return
       }
 
+      case 'sketch': {
+        const last = d.pts[d.pts.length - 1]
+        if (e.shiftKey) d.pts = [d.pts[0], p]
+        else if (dist(last, p) * zoom > 3) d.pts.push(p)
+        s.set({ sketch: [...d.pts] })
+        return
+      }
+
+      case 'brush-point': {
+        const points = d.brush.points.slice()
+        points[d.index] = p
+        s.set({ drafts: new Map([[d.brush.id, { ...d.brush, points }]]) })
+        return
+      }
+
       case 'bend': {
         const { a, b } = lineAnchors(d.line, d.base)
         const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
@@ -396,6 +434,22 @@ export function Canvas() {
         o = { ...d.obj, x: d.origin.x - def.w / 2, y: d.origin.y - def.h / 2, ...def } as FigObject
       }
       const obj = o
+      s.doc.transact((tx) => tx.add(obj))
+      s.set({ selection: [obj.id], tool: 'select' })
+      return done()
+    }
+    if (d.kind === 'sketch') {
+      s.set({ sketch: null })
+      let pts = d.pts
+      const zoom = s.view.zoom
+      const length = pts.reduce((acc, q, i) => (i ? acc + dist(pts[i - 1], q) : 0), 0)
+      if (length * zoom < 10) pts = [pts[0], { x: pts[0].x + 240, y: pts[0].y }]
+      // A path that ends where it started becomes a closed loop (e.g. a cell membrane).
+      const closed = pts.length > 8 && dist(pts[0], pts[pts.length - 1]) * zoom < 24
+      pts = simplify(pts, 2.5 / zoom)
+      if (closed && pts.length > 3) pts = pts.slice(0, -1)
+      const brush = makeBrush(d.z, s.brushKind, pts, closed && pts.length > 2)
+      const obj = d.parent ? { ...brush, parentId: d.parent } : brush
       s.doc.transact((tx) => tx.add(obj))
       s.set({ selection: [obj.id], tool: 'select' })
       return done()
@@ -489,6 +543,7 @@ export function Canvas() {
             <SceneContent snap={live} mode="canvas" hidden={hidden} />
           </g>
           <Overlay snap={live} />
+          <Sketch />
         </g>
       </svg>
       {editingText && <TextEditor key={editingText} id={editingText} />}
@@ -500,4 +555,12 @@ export function isTyping(): boolean {
   const el = document.activeElement as HTMLElement | null
   if (!el) return false
   return el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
+}
+
+/** Live preview of a freehand brush stroke. */
+function Sketch() {
+  const pts = useEditor((s) => s.sketch)
+  const zoom = useEditor((s) => s.view.zoom)
+  if (!pts || pts.length < 2) return null
+  return <polyline points={pts.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke="#2f80ed" strokeWidth={2 / zoom} strokeLinecap="round" strokeLinejoin="round" opacity={0.7} pointerEvents="none" />
 }

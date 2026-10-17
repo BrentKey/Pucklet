@@ -12,6 +12,6 @@ createRoot(document.getElementById('root')!).render(
 // Handy for debugging and automated checks in development builds.
 if (import.meta.env.DEV) {
   void import('./state/editor').then(({ useEditor }) => {
-    ;(window as unknown as { biofig: unknown }).biofig = useEditor
+    ;(window as unknown as { pucklet: unknown }).pucklet = useEditor
   })
 }

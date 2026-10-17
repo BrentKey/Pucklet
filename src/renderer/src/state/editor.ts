@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from 'react'
 import { create } from 'zustand'
 import { FigureDoc, Snapshot } from '../model/doc'
-import type { Cap, FigObject, Id, Route } from '../model/types'
+import type { BrushKind, Cap, FigObject, Id, Route } from '../model/types'
 
-export type Tool = 'select' | 'hand' | 'rect' | 'ellipse' | 'text' | 'line' | 'arrow'
+export type Tool = 'select' | 'hand' | 'rect' | 'ellipse' | 'text' | 'line' | 'arrow' | 'brush'
 export type ViewFilter = 'none' | 'grayscale' | 'protanopia' | 'deuteranopia' | 'tritanopia'
-export type LeftPanel = 'library' | 'uploads'
+export type LeftPanel = 'library' | 'uploads' | 'layers'
 
 export interface View {
   zoom: number
@@ -41,6 +41,9 @@ interface EditorState {
   leftPanel: LeftPanel
   exportOpen: boolean
   lineStyle: { route: Route; startCap: Cap; endCap: Cap }
+  brushKind: BrushKind
+  /** Points of the freehand path being drawn with the brush tool (screen feedback). */
+  sketch: { x: number; y: number }[] | null
   toast: string | null
 
   set: (patch: Partial<EditorState>) => void
@@ -54,7 +57,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useEditor = create<EditorState>((set, get) => ({
   doc: new FigureDoc(),
-  fileName: 'Untitled.biofig',
+  fileName: 'Untitled.pucklet',
   filePath: undefined,
   savedVersion: 0,
 
@@ -73,6 +76,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   leftPanel: 'library',
   exportOpen: false,
   lineStyle: { route: 'straight', startCap: 'none', endCap: 'arrow' },
+  brushKind: 'bilayer',
+  sketch: null,
   toast: null,
 
   set: (patch) => set(patch),

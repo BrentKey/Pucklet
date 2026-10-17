@@ -23,5 +23,5 @@ const api = {
   }
 }
 
-contextBridge.exposeInMainWorld('biofigNative', api)
+contextBridge.exposeInMainWorld('puckletNative', api)
 export type NativeApi = typeof api

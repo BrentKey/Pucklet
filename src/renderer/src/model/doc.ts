@@ -188,6 +188,19 @@ export class FigureDoc {
     }, USER)
   }
 
+  /**
+   * Continuous edits (dragging a slider or colour picker) between begin/end become a single
+   * undo step instead of one per intermediate value.
+   */
+  beginGesture(): void {
+    this.undoManager.stopCapturing()
+    this.undoManager.captureTimeout = Number.MAX_SAFE_INTEGER
+  }
+  endGesture(): void {
+    this.undoManager.captureTimeout = 0
+    this.undoManager.stopCapturing()
+  }
+
   undo(): void {
     this.undoManager.undo()
   }

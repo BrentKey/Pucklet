@@ -11,7 +11,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 const RENDERER_DIR = join(__dirname, '../renderer')
-const FILE_FILTERS = [{ name: 'BioFig Figure', extensions: ['biofig'] }]
+const FILE_FILTERS = [{ name: 'Pucklet Figure', extensions: ['pucklet'] }]
 const closeConfirmed = new WeakSet<BrowserWindow>()
 // Imported SVGs are sanitized, but the CSP is a second line of defence: no remote code, no remote loads.
 const CSP =
@@ -23,7 +23,7 @@ function createWindow(): BrowserWindow {
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    title: 'BioFig',
+    title: 'Pucklet',
     backgroundColor: '#f4f5f7',
     show: false,
     webPreferences: {
@@ -219,7 +219,7 @@ function registerWindowIpc(): void {
 }
 
 /**
- * BIOFIG_SMOKE_DIR=<dir>: load the app, check the renderer and the native bridge, save a
+ * PUCKLET_SMOKE_DIR=<dir>: load the app, check the renderer and the native bridge, save a
  * screenshot and a test PDF into <dir>, then quit. Used to verify builds without a human.
  */
 async function smokeTest(win: BrowserWindow, dir: string): Promise<void> {
@@ -228,7 +228,7 @@ async function smokeTest(win: BrowserWindow, dir: string): Promise<void> {
   const report = await win.webContents.executeJavaScript(`(async () => {
     const res = await fetch('icon-packs/index.json').catch(() => null)
     return {
-      bridge: typeof window.biofigNative === 'object',
+      bridge: typeof window.puckletNative === 'object',
       ui: !!document.querySelector('.topbar') && !!document.querySelector('.canvas-wrap'),
       iconTiles: document.querySelectorAll('.icon-tile').length,
       iconIndex: res ? res.status : 'fetch failed'
@@ -257,7 +257,7 @@ app.whenReady().then(() => {
   registerIpc()
   registerWindowIpc()
   const win = createWindow()
-  if (process.env.BIOFIG_SMOKE_DIR) void smokeTest(win, process.env.BIOFIG_SMOKE_DIR)
+  if (process.env.PUCKLET_SMOKE_DIR) void smokeTest(win, process.env.PUCKLET_SMOKE_DIR)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

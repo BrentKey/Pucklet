@@ -15,7 +15,10 @@ export interface Credit {
 /** Third-party assets used in the figure, grouped by library, author and licence. */
 export function creditsFor(snap: Snapshot): Credit[] {
   const used = new Set<string>()
-  for (const o of snap.objects.values()) if (o.type === 'icon') used.add(o.assetId)
+  for (const o of snap.objects.values()) {
+    if (o.type === 'icon') used.add(o.assetId)
+    if (o.type === 'brush' && o.assetId) used.add(o.assetId)
+  }
   const groups = new Map<string, Credit>()
   for (const id of used) {
     const a: Asset | undefined = snap.assets.get(id)
@@ -64,7 +67,7 @@ export function figureSvg(snap: Snapshot, opts: SvgOptions = {}): string {
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
-    `<desc>Created with BioFig (open source).${credits ? ' ' + escXml(credits) : ''}</desc>` +
+    `<desc>Created with Pucklet (open source).${credits ? ' ' + escXml(credits) : ''}</desc>` +
     body +
     `</svg>\n`
   )

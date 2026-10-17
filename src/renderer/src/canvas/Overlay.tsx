@@ -3,7 +3,8 @@ import type { Pt } from '../model/geometry'
 import { boxCorners, center, objectBounds, resolveLine, rotate } from '../model/geometry'
 import { boundsOf } from '../model/ops'
 import type { Handle } from '../model/transform'
-import type { Box, FigObject } from '../model/types'
+import type { Box, BrushObj, FigObject } from '../model/types'
+import { flattenPath } from '../model/brush'
 import { isBoxObj } from '../model/types'
 import { useEditor } from '../state/editor'
 
@@ -103,6 +104,28 @@ function LineHandles({ o, snap, zoom }: { o: Extract<FigObject, { type: 'line' }
   )
 }
 
+function BrushHandles({ o, zoom }: { o: BrushObj; zoom: number }) {
+  const px = 1 / zoom
+  const n = o.points.length
+  const segs = o.closed ? n : n - 1
+  const poly = flattenPath(o.points, o.closed, o.smooth)
+  // Midpoint of each segment along the smoothed path (16 samples per segment, see flattenPath).
+  const mids = Array.from({ length: segs }, (_, i) => (o.smooth && n > 2 ? poly[i * 16 + 8] : { x: (o.points[i].x + o.points[(i + 1) % n].x) / 2, y: (o.points[i].y + o.points[(i + 1) % n].y) / 2 }))
+  return (
+    <g>
+      <path d={'M' + poly.map((p) => `${p.x} ${p.y}`).join(' L')} fill="none" stroke={BLUE} strokeWidth={px} strokeDasharray={`${4 * px} ${3 * px}`} pointerEvents="none" />
+      {mids.map((m, i) =>
+        m ? <circle key={'m' + i} data-handle={`bmid:${i}`} cx={m.x} cy={m.y} r={3.5 * px} fill="#fff" stroke={BLUE} strokeWidth={px} opacity={0.8} style={{ cursor: 'copy' }} /> : null
+      )}
+      {o.points.map((p, i) => (
+        <circle key={i} data-handle={`bpt:${i}`} cx={p.x} cy={p.y} r={5 * px} fill={BLUE} stroke="#fff" strokeWidth={1.5 * px} style={{ cursor: 'move' }}>
+          <title>Drag to reshape · ⌥-click to delete</title>
+        </circle>
+      ))}
+    </g>
+  )
+}
+
 export function Overlay({ snap }: { snap: Snapshot }) {
   const selection = useEditor((s) => s.selection)
   const context = useEditor((s) => s.context)
@@ -122,6 +145,14 @@ export function Overlay({ snap }: { snap: Snapshot }) {
   let frame: React.ReactNode = null
   if (sel.length === 1 && sel[0].type === 'line') {
     frame = <LineHandles o={sel[0]} snap={snap} zoom={zoom} />
+  } else if (sel.length === 1 && sel[0].type === 'brush' && !sel[0].locked) {
+    const b = objectBounds(sel[0], snap)!
+    frame = (
+      <g>
+        <BoxFrame box={{ ...b, rotation: 0 }} color={BLUE} zoom={zoom} handles rotatable />
+        <BrushHandles o={sel[0]} zoom={zoom} />
+      </g>
+    )
   } else if (sel.length === 1 && isBoxObj(sel[0])) {
     const o = sel[0]
     frame = <BoxFrame box={o} color={o.locked ? '#999' : BLUE} zoom={zoom} handles={!o.locked && editingText !== o.id} rotatable />

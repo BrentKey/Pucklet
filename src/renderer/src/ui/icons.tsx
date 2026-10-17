@@ -49,6 +49,14 @@ export const Icon = {
       <path d="M5 12h13M18 6v12" />
     </I>
   ),
+  brush: () => (
+    <I>
+      <path d="M3 17c3-6 6 2 9-4s6 2 9-4" />
+      <circle cx="3" cy="17" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="13" r="1.6" fill="currentColor" />
+      <circle cx="21" cy="9" r="1.6" fill="currentColor" />
+    </I>
+  ),
   undo: () => (
     <I>
       <path d="M9 14L4 9l5-5" />
@@ -181,6 +189,23 @@ export const Icon = {
     <I>
       <path d="M4 4h16M4 20h16" />
       <rect x="8" y="9" width="8" height="6" />
+    </I>
+  ),
+  eye: () => (
+    <I size={15}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </I>
+  ),
+  eyeOff: () => (
+    <I size={15}>
+      <path d="M3 3l18 18M10.6 5.1A10.8 10.8 0 0112 5c6.5 0 10 7 10 7a17 17 0 01-3.2 4.2M6.6 6.6A17.6 17.6 0 002 12s3.5 7 10 7a9.7 9.7 0 005.4-1.6" />
+    </I>
+  ),
+  layers: () => (
+    <I>
+      <path d="M12 3l9 5-9 5-9-5z" />
+      <path d="M3 13l9 5 9-5" />
     </I>
   ),
   search: () => (

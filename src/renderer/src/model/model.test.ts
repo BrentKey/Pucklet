@@ -91,6 +91,18 @@ describe('document operations', () => {
     expect(doc.snapshot().get('a')!.parentId).toBeUndefined()
   })
 
+  it('merges a continuous gesture into one undo step', () => {
+    const doc = docWith([rect('a', 0, 0, 'a0')])
+    doc.beginGesture()
+    for (const opacity of [0.9, 0.7, 0.5]) doc.transact((tx) => tx.update('a', { opacity }))
+    doc.endGesture()
+    doc.transact((tx) => tx.update('a', { x: 50 }))
+    doc.undo()
+    expect(doc.snapshot().get('a')).toMatchObject({ x: 0, opacity: 0.5 })
+    doc.undo()
+    expect(doc.snapshot().get('a')!.opacity).toBe(1)
+  })
+
   it('reorders within siblings', () => {
     const doc = docWith([rect('a', 0, 0, 'a0'), rect('b', 0, 0, 'a1'), rect('c', 0, 0, 'a2')])
     reorder(doc, ['a'], 'front')
@@ -144,6 +156,61 @@ describe('file format', () => {
   })
 
   it('rejects files that are not figures', () => {
-    expect(() => deserialize(new Uint8Array([1, 2, 3]))).toThrow(/not a BioFig/)
+    expect(() => deserialize(new Uint8Array([1, 2, 3]))).toThrow(/not a Pucklet/)
+  })
+})
+
+describe('panels', () => {
+  it('lays out frames with letters and re-letters in reading order', async () => {
+    const { addPanelLayout, reletterPanels, PANEL_LAYOUTS, DEFAULT_PANEL_OPTIONS, panelLetter } = await import('./panels')
+    const doc = new FigureDoc({ meta: { width: 1000, height: 600, background: '#ffffff' }, objects: [], assets: [] })
+    addPanelLayout(doc, PANEL_LAYOUTS.find((l) => l.id === '2x2')!, DEFAULT_PANEL_OPTIONS)
+    const labels = () =>
+      [...doc.snapshot().objects.values()]
+        .filter((o) => o.role === 'panel-label')
+        .map((o) => ({ t: (o as never as { lines: { text: string }[][] }).lines[0][0].text, x: (o as RectObj).x, y: (o as RectObj).y }))
+        .sort((a, b) => a.y - b.y || a.x - b.x)
+    expect(labels().map((l) => l.t)).toEqual(['A', 'B', 'C', 'D'])
+    const frames = [...doc.snapshot().objects.values()].filter((o) => o.role === 'panel-frame') as RectObj[]
+    expect(frames).toHaveLength(4)
+    expect(frames[0].w).toBeCloseTo((1000 - 48 - 24) / 2)
+
+    // Swap two labels' positions, then re-letter.
+    const [a, , , d] = [...doc.snapshot().objects.values()].filter((o) => o.role === 'panel-label') as RectObj[]
+    doc.transact((tx) => {
+      tx.update(a.id, { x: d.x, y: d.y })
+      tx.update(d.id, { x: a.x, y: a.y })
+    })
+    reletterPanels(doc, '(a)')
+    expect(labels().map((l) => l.t)).toEqual(['(a)', '(b)', '(c)', '(d)'])
+    expect(panelLetter(27, 'A')).toBe('AB')
+  })
+})
+
+describe('brushes', () => {
+  it('spaces units evenly along open and closed paths', async () => {
+    const { brushUnits, simplify, circlePoints } = await import('./brush')
+    const open = brushUnits({ points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], closed: false, smooth: false, spacing: 10 })
+    expect(open.units).toHaveLength(11)
+    expect(open.units[10].p).toEqual({ x: 100, y: 0 })
+    expect(open.units[0].angle).toBe(0)
+
+    const ring = brushUnits({ points: circlePoints(0, 0, 100, 100, 12), closed: true, smooth: true, spacing: 12 })
+    const gaps = ring.units.map((u, i) => Math.hypot(u.p.x - ring.units[(i + 1) % ring.units.length].p.x, u.p.y - ring.units[(i + 1) % ring.units.length].p.y))
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1)
+    expect(ring.s.length).toBeGreaterThan(620)
+
+    const noisy = Array.from({ length: 50 }, (_, i) => ({ x: i * 2, y: i % 2 ? 0.3 : -0.3 }))
+    expect(simplify(noisy, 1)).toHaveLength(2)
+  })
+
+  it('moves, scales and copies with the rest of the figure', async () => {
+    const { makeBrush } = await import('./defaults')
+    const b = { ...makeBrush('a0', 'bilayer', [{ x: 0, y: 0 }, { x: 100, y: 0 }], false), id: 'b' }
+    const doc = docWith([b])
+    expect(translate(doc.snapshot(), ['b'], 5, 5).get('b')).toMatchObject({ points: [{ x: 5, y: 5 }, { x: 105, y: 5 }] })
+    expect(scaleAbout(doc.snapshot(), ['b'], { x: 0, y: 0 }, 2, 2).get('b')).toMatchObject({ points: [{ x: 0, y: 0 }, { x: 200, y: 0 }] })
+    const back = deserialize(serialize(doc.toData()))
+    expect(back.objects[0]).toEqual(b)
   })
 })

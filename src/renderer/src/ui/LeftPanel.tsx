@@ -6,6 +6,7 @@ import { LIBRARY_DRAG_TYPE, placeAsset, placeLibraryIcon } from '../library/plac
 import type { Asset } from '../model/types'
 import { useEditor, useSnapshot } from '../state/editor'
 import { Icon } from './icons'
+import { LayersPanel } from './LayersPanel'
 
 interface PackIndex {
   packs: { id: string; name: string; manifest: string }[]
@@ -174,8 +175,11 @@ export function LeftPanel() {
         <button className={panel === 'uploads' ? 'on' : ''} onClick={() => set({ leftPanel: 'uploads' })}>
           <Icon.upload /> Uploads
         </button>
+        <button className={panel === 'layers' ? 'on' : ''} onClick={() => set({ leftPanel: 'layers' })}>
+          <Icon.layers /> Layers
+        </button>
       </div>
-      {panel === 'library' ? <Library /> : <Uploads />}
+      {panel === 'library' ? <Library /> : panel === 'uploads' ? <Uploads /> : <LayersPanel />}
     </aside>
   )
 }

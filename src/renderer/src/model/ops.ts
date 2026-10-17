@@ -133,6 +133,39 @@ export function setLocked(doc: FigureDoc, ids: Id[], locked: boolean): void {
   doc.transact((tx) => ids.forEach((id) => tx.update(id, { locked })))
 }
 
+export function setHidden(doc: FigureDoc, ids: Id[], hidden: boolean): void {
+  doc.transact((tx) => ids.forEach((id) => tx.update(id, { hidden })))
+}
+
+/**
+ * Moves objects under `parent` (a group id, or '' for top level), placed just below `before`
+ * in paint order (null = on top). Coordinates are absolute, so nothing moves on the canvas.
+ */
+export function moveInto(doc: FigureDoc, ids: Id[], parent: Id | '', before: Id | null): void {
+  const snap = doc.snapshot()
+  // A group can't go inside itself or one of its descendants.
+  if (parent && ids.some((id) => id === parent || snap.descendants([id]).includes(parent))) return
+  const siblings = snap.childIdsOf(parent).filter((id) => !ids.includes(id))
+  const idx = before ? siblings.indexOf(before) : siblings.length
+  if (idx < 0) return
+  const lo = idx > 0 ? snap.get(siblings[idx - 1])!.z : null
+  const hi = idx < siblings.length ? snap.get(siblings[idx])!.z : null
+  const moving = ids.map((id) => snap.get(id)).filter((o): o is FigObject => !!o).sort((a, b) => (a.z < b.z ? -1 : 1))
+  const keys = generateNKeysBetween(lo, hi, moving.length)
+  const oldParents = new Set(moving.map((o) => snap.parentOf(o.id)))
+  doc.transact((tx) => {
+    moving.forEach((o, i) => {
+      const { parentId: _p, ...rest } = o
+      void _p
+      tx.put({ ...rest, ...(parent ? { parentId: parent } : {}), z: keys[i] } as FigObject)
+    })
+    // Groups emptied by the move are removed.
+    for (const p of oldParents) {
+      if (p && p !== parent && tx.snap.childIdsOf(p).length === 0) tx.remove(p)
+    }
+  })
+}
+
 // ---------------------------------------------------------------------------------------
 // Align & distribute
 
@@ -205,7 +238,7 @@ export function copyObjects(snap: Snapshot, ids: Id[]): Clip {
       objects.push({ ...o, start: fix(o.start, g.p1), end: fix(o.end, g.p2) })
     } else objects.push(o)
   }
-  const assetIds = new Set(objects.flatMap((o) => (o.type === 'icon' ? [o.assetId] : [])))
+  const assetIds = new Set(objects.flatMap((o) => (o.type === 'icon' || (o.type === 'brush' && o.assetId) ? [o.assetId!] : [])))
   return { objects, assets: [...assetIds].map((a) => snap.assets.get(a)).filter((a): a is Asset => !!a) }
 }
 
@@ -239,6 +272,8 @@ export function pasteClip(doc: FigureDoc, clip: Clip, parent: Id | '', dx: numbe
         copy = { ...copy, start: end(copy.start), end: end(copy.end) }
       } else if (isBoxObj(copy)) {
         copy = { ...copy, x: copy.x + dx, y: copy.y + dy }
+      } else if (copy.type === 'brush') {
+        copy = { ...copy, points: copy.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
       }
       tx.add(copy)
     }

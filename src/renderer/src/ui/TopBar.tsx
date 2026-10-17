@@ -6,6 +6,8 @@ import { platform } from '../platform'
 import type { Tool, ViewFilter } from '../state/editor'
 import { useDirty, useEditor } from '../state/editor'
 import { IconButton } from './controls'
+import { BRUSH_PRESETS } from '../model/brush'
+import type { BrushKind } from '../model/types'
 import { Icon } from './icons'
 
 const TOOLS: { tool: Tool; label: string; key: string; icon: () => ReactElement }[] = [
@@ -15,7 +17,8 @@ const TOOLS: { tool: Tool; label: string; key: string; icon: () => ReactElement 
   { tool: 'ellipse', label: 'Ellipse', key: 'O', icon: Icon.ellipse },
   { tool: 'text', label: 'Text', key: 'T', icon: Icon.text },
   { tool: 'line', label: 'Line', key: 'L', icon: Icon.line },
-  { tool: 'arrow', label: 'Arrow / connector', key: 'A', icon: Icon.arrow }
+  { tool: 'arrow', label: 'Arrow / connector', key: 'A', icon: Icon.arrow },
+  { tool: 'brush', label: 'Brush: draw membranes, DNA, filaments', key: 'B', icon: Icon.brush }
 ]
 
 const FILTERS: { value: ViewFilter; label: string }[] = [
@@ -56,7 +59,7 @@ function FileMenu() {
         <div className="menu-pop">
           {item('New figure', 'file.new', `${mod}N`)}
           {item('Open…', 'file.open', `${mod}O`)}
-          {item(platform.kind === 'web' ? 'Download (.biofig)' : 'Save', 'file.save', `${mod}S`)}
+          {item(platform.kind === 'web' ? 'Download (.pucklet)' : 'Save', 'file.save', `${mod}S`)}
           {platform.kind === 'electron' && item('Save as…', 'file.saveAs', `${mod}⇧S`)}
           <hr />
           {item('Import image or SVG…', 'file.import', `${mod}⇧I`)}
@@ -73,10 +76,11 @@ export function TopBar() {
   const zoom = useEditor((s) => s.view.zoom)
   const filter = useEditor((s) => s.filter)
   const lineStyle = useEditor((s) => s.lineStyle)
+  const brushKind = useEditor((s) => s.brushKind)
   const dirty = useDirty()
 
   useEffect(() => {
-    platform.setTitle(`${dirty ? '• ' : ''}${fileName.replace(/\.biofig$/, '')} — BioFig`)
+    platform.setTitle(`${dirty ? '• ' : ''}${fileName.replace(/\.pucklet$/, '')} — Pucklet`)
   }, [dirty, fileName])
 
   return (
@@ -84,7 +88,7 @@ export function TopBar() {
       <div className="topbar-left">
         <FileMenu />
         <div className="file-name" title={fileName}>
-          {fileName.replace(/\.biofig$/, '')}
+          {fileName.replace(/\.pucklet$/, '')}
           {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </div>
       </div>
@@ -96,16 +100,31 @@ export function TopBar() {
           </IconButton>
         ))}
         <span className="toolbar-sep" />
-        <select
-          className="mini-select"
-          title="Connector style for new arrows"
-          value={lineStyle.route}
-          onChange={(e) => useEditor.getState().set({ lineStyle: { ...lineStyle, route: e.target.value as never } })}
-        >
-          <option value="straight">Straight</option>
-          <option value="curved">Curved</option>
-          <option value="elbow">Elbow</option>
-        </select>
+        {tool === 'brush' ? (
+          <select
+            className="mini-select"
+            title="Pattern for the brush tool"
+            value={brushKind}
+            onChange={(e) => useEditor.getState().set({ brushKind: e.target.value as BrushKind })}
+          >
+            {BRUSH_PRESETS.filter((p) => p.kind !== 'icon').map((p) => (
+              <option key={p.kind} value={p.kind}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select
+            className="mini-select"
+            title="Connector style for new arrows"
+            value={lineStyle.route}
+            onChange={(e) => useEditor.getState().set({ lineStyle: { ...lineStyle, route: e.target.value as never } })}
+          >
+            <option value="straight">Straight</option>
+            <option value="curved">Curved</option>
+            <option value="elbow">Elbow</option>
+          </select>
+        )}
         <span className="toolbar-sep" />
         <IconButton title="Undo (⌘Z)" onClick={commands['edit.undo']}>
           <Icon.undo />

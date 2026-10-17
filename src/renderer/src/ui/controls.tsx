@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { NEUTRALS, SAFE_COLORS } from '../model/defaults'
+import { useEditor } from '../state/editor'
 
 export function Section({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
   return (
@@ -131,7 +132,13 @@ export function ColorField({ value, onChange, allowNone, title }: { value: strin
             {allowNone && <button className="swatch none" title="None" onClick={() => onChange('none')} />}
           </div>
           <div className="color-custom">
-            <input type="color" value={isNone ? '#ffffff' : value} onChange={(e) => onChange(e.target.value)} />
+            <input
+              type="color"
+              value={isNone ? '#ffffff' : value}
+              onFocus={() => useEditor.getState().doc.beginGesture()}
+              onBlur={() => useEditor.getState().doc.endGesture()}
+              onChange={(e) => onChange(e.target.value)}
+            />
             <input
               className="hex"
               defaultValue={isNone ? '' : value}

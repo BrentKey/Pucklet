@@ -1,5 +1,6 @@
 import { newId } from './doc'
-import type { Asset, Cap, EllipseObj, IconObj, LineObj, RectObj, Route, TextObj } from './types'
+import type { Asset, BrushKind, BrushObj, Cap, EllipseObj, IconObj, LineObj, RectObj, Route, TextObj } from './types'
+import { presetFor } from './brush'
 import { withTextSize } from './transform'
 
 /** Fonts available on both macOS and Windows, so figures look the same everywhere. */
@@ -86,4 +87,9 @@ export function makeIcon(z: string, asset: Asset, cx: number, cy: number, maxSiz
   const w = Math.max(4, asset.width * s)
   const h = Math.max(4, asset.height * s)
   return { ...base(z), type: 'icon', assetId: asset.id, x: cx - w / 2, y: cy - h / 2, w, h, rotation: 0, flipX: false, flipY: false, recolor: {}, name: asset.name }
+}
+
+export function makeBrush(z: string, kind: BrushKind, points: { x: number; y: number }[], closed: boolean): BrushObj {
+  const p = presetFor(kind)
+  return { ...base(z), type: 'brush', kind, points, closed, smooth: true, spacing: p.spacing, thickness: p.thickness, colors: [...p.colors], flip: false }
 }
