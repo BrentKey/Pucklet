@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+.DS_Store
+*.log
+.cache/
+src/renderer/public/icon-packs/
+# BioRender help-centre text is their copyrighted content; keep it local only.
+research/raw/
+# Local Claude Code permissions file
+settings.local.json
