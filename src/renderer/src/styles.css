@@ -1129,3 +1129,125 @@ button.on-btn {
   width: 14px;
   height: 14px;
 }
+
+/* ---------- Data dialogs ---------- */
+
+.data-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.data-sources > button.primary {
+  align-self: flex-start;
+  height: 36px;
+}
+.data-preview {
+  max-height: 240px;
+  overflow: auto;
+  margin: 8px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.data-preview table,
+.data-grid {
+  border-collapse: collapse;
+  font-size: 12px;
+  user-select: text;
+}
+.data-preview th,
+.data-preview td {
+  padding: 3px 10px;
+  border-bottom: 1px solid #f0f1f3;
+  white-space: nowrap;
+  text-align: left;
+}
+.data-preview th {
+  position: sticky;
+  top: 0;
+  background: #f7f7f8;
+}
+.data-preview td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.data-modal {
+  width: 860px;
+}
+.data-grid-wrap {
+  max-height: 55vh;
+  overflow: auto;
+  margin: 10px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.data-grid th,
+.data-grid td {
+  position: relative;
+  padding: 0;
+  border: 1px solid #eceef1;
+}
+.data-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f7f7f8;
+}
+.data-grid input {
+  width: 110px;
+  height: 26px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 6px !important;
+  background: transparent;
+  font-size: 12px;
+}
+.data-grid th input {
+  font-weight: 600;
+}
+.data-grid input.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.data-grid input:focus {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: -2px;
+  background: #fff;
+}
+.data-grid .rownum {
+  min-width: 42px;
+  padding: 0 6px;
+  color: var(--muted);
+  text-align: right;
+  background: #fafafa;
+}
+.data-grid button {
+  height: 22px;
+  padding: 0 8px;
+}
+.data-grid .del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #b0b6c0;
+  visibility: hidden;
+}
+.data-grid th:hover .del,
+.data-grid .rownum:hover .del {
+  visibility: visible;
+}
+.data-grid .rownum .del {
+  left: 2px;
+  right: auto;
+}
+.series-name {
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

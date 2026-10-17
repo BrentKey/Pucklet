@@ -3,6 +3,7 @@ import { makeIcon } from '../model/defaults'
 import type { Pt } from '../model/geometry'
 import type { Asset, AssetSource } from '../model/types'
 import { useEditor } from '../state/editor'
+import { parseFile } from '../model/data'
 
 export const LIBRARY_DRAG_TYPE = 'application/x-pucklet-icon'
 
@@ -96,6 +97,20 @@ export async function importFiles(files: { name: string; data: Uint8Array }[], a
   if (placed.length) useEditor.getState().select(placed)
 }
 
+const DATA_EXT = /\.(csv|tsv|txt|xlsx|xlsm)$/i
+
 export async function importDroppedFiles(files: File[], at: Pt): Promise<void> {
+  const data = files.find((f) => DATA_EXT.test(f.name))
+  if (data) {
+    try {
+      const sheets = await parseFile(data.name, new Uint8Array(await data.arrayBuffer()))
+      if (sheets.length) useEditor.getState().set({ dataDialog: { mode: 'import', sheets, at } })
+      else useEditor.getState().showToast(`${data.name} has no data.`)
+    } catch (e) {
+      useEditor.getState().showToast((e as Error).message)
+    }
+    files = files.filter((f) => f !== data)
+    if (!files.length) return
+  }
   await importFiles(await Promise.all(files.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }))), at)
 }

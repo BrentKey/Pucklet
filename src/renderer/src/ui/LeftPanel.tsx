@@ -6,6 +6,9 @@ import { LIBRARY_DRAG_TYPE, placeAsset, placeLibraryIcon } from '../library/plac
 import type { Asset } from '../model/types'
 import { useEditor, useSnapshot } from '../state/editor'
 import { Icon } from './icons'
+import { setPrefs } from '../app/prefs'
+
+const isShareAlike = (license: string) => /-sa\b|by-sa/i.test(license)
 import { LayersPanel } from './LayersPanel'
 import { TemplatesPanel } from './TemplatesPanel'
 
@@ -86,7 +89,9 @@ function Library() {
       ),
     [packs]
   )
-  const inPack = packFilter === 'all' ? all : all.filter((i) => i.pack.id === packFilter)
+  const shareAlike = useEditor((s) => s.prefs.shareAlike)
+  const allowed = useMemo(() => (shareAlike ? all : all.filter((i) => !isShareAlike(i.icon.license))), [all, shareAlike])
+  const inPack = packFilter === 'all' ? allowed : allowed.filter((i) => i.pack.id === packFilter)
   const categories = useMemo(() => [...new Set(inPack.map((i) => i.icon.category))].sort(), [inPack])
   const terms = query.toLowerCase().split(/[\s,]+/).filter(Boolean)
   const results = useMemo(() => {
@@ -111,12 +116,15 @@ function Library() {
       </div>
       <div className="lib-filters">
         <select value={packFilter} onChange={(e) => (setPackFilter(e.target.value), setCategory('all'))} title="Icon library">
-          <option value="all">All libraries ({all.length})</option>
-          {packs.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.icons.length})
-            </option>
-          ))}
+          <option value="all">All libraries ({allowed.length})</option>
+          {packs
+            .map((p) => ({ p, n: allowed.filter((i) => i.pack.id === p.id).length }))
+            .filter(({ n }) => n > 0)
+            .map(({ p, n }) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({n})
+              </option>
+            ))}
         </select>
         <select value={category} onChange={(e) => setCategory(e.target.value)} title="Category">
           <option value="all">All categories</option>
@@ -127,6 +135,12 @@ function Library() {
           ))}
         </select>
       </div>
+      {all.some((i) => isShareAlike(i.icon.license)) && (
+        <label className="check small pad" title="CC BY-SA icons require you to release the figure under the same licence. Most journals accept this, but check before publishing.">
+          <input type="checkbox" checked={shareAlike} onChange={(e) => setPrefs({ shareAlike: e.target.checked })} />
+          Include share-alike (CC BY-SA) libraries
+        </label>
+      )}
       {loading && <p className="muted pad">Loading icon libraries…</p>}
       {error && (
         <div className="empty-lib">

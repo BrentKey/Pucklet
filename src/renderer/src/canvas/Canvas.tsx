@@ -9,6 +9,7 @@ import type { Changes, Handle } from '../model/transform'
 import { resizeBox, rotateAbout, scaleAbout, translate, withTextSize } from '../model/transform'
 import type { BrushObj, FigObject, IconObj, Id, LineObj, TextObj } from '../model/types'
 import { cropPan, cropResize } from '../model/crop'
+import { withTableSize } from '../render/Table'
 import { isBoxObj } from '../model/types'
 import { SceneContent } from '../render/Figure'
 import { useEditor, useLiveSnapshot, useSnapshot } from '../state/editor'
@@ -369,6 +370,15 @@ export function Canvas() {
           return
         }
         if (single && isBoxObj(single)) {
+          if (single.type === 'table') {
+            // Tables keep their proportions: resizing scales the text.
+            const r = resizeBox(single, d.handle, p, true)
+            const k = r.h / single.h
+            const t = withTableSize({ ...single, style: { ...single.style, fontSize: Math.max(4, Math.round(single.style.fontSize * k * 10) / 10) } })
+            const c = center(r)
+            s.set({ drafts: new Map([[t.id, { ...t, x: c.x - t.w / 2, y: c.y - t.h / 2 }]]) })
+            return
+          }
           const proportional = single.type === 'icon' || single.type === 'text' ? !e.shiftKey : e.shiftKey
           if (single.type === 'text' && (d.handle === 'e' || d.handle === 'w')) {
             // Side handles set the width the text wraps within; the font size stays.

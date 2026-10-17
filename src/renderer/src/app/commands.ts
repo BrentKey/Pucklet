@@ -18,6 +18,7 @@ import type { Tool } from '../state/editor'
 import { contentSignature, useEditor } from '../state/editor'
 import { linesFromPlain } from '../text/layout'
 import { setPrefs } from './prefs'
+import { looksTabular, parseDelimited } from '../model/data'
 import { withTextSize } from '../model/transform'
 
 const S = () => useEditor.getState()
@@ -222,6 +223,10 @@ export function installClipboard(): () => void {
     }
     const text = e.clipboardData.getData('text/plain')
     if (!text) return
+    if (looksTabular(text)) {
+      s.set({ dataDialog: { mode: 'import', sheets: [{ name: 'Pasted', grid: parseDelimited(text) }] } })
+      return
+    }
     const clip = clipFromText(text)
     if (clip) {
       s.select(pasteClip(s.doc, clip, s.context, 16, 16))
@@ -262,6 +267,7 @@ export const commands: Record<string, () => void> = {
   'file.saveAs': () => void saveFigure(true),
   'file.import': () => void importImages(),
   'file.export': () => S().set({ exportOpen: true }),
+  'file.importData': () => S().set({ dataDialog: { mode: 'import' } }),
   'edit.undo': undo,
   'edit.redo': redo,
   'edit.duplicate': () => !isTyping() && duplicate(),
@@ -287,7 +293,7 @@ export const commands: Record<string, () => void> = {
 
 // In Electron these arrive from the native menu's accelerators; in a browser we bind them here.
 const MOD_KEYS: Record<string, string> = {
-  n: 'file.new', o: 'file.open', s: 'file.save', 'shift+s': 'file.saveAs', 'shift+i': 'file.import', e: 'file.export',
+  'shift+d': 'file.importData', n: 'file.new', o: 'file.open', s: 'file.save', 'shift+s': 'file.saveAs', 'shift+i': 'file.import', e: 'file.export',
   z: 'edit.undo', 'shift+z': 'edit.redo', y: 'edit.redo', d: 'edit.duplicate', a: 'edit.selectAll',
   g: 'arrange.group', 'shift+g': 'arrange.ungroup', ']': 'arrange.forward', '[': 'arrange.backward',
   'shift+]': 'arrange.front', 'shift+[': 'arrange.back', l: 'arrange.lock',

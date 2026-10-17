@@ -13,7 +13,7 @@ import type { Asset, FigObject } from './types'
 export const FORMAT = 'pucklet'
 export const SCHEMA_VERSION = 2
 
-const KNOWN_TYPES = new Set(['rect', 'ellipse', 'text', 'icon', 'line', 'brush', 'group'])
+const KNOWN_TYPES = new Set(['rect', 'ellipse', 'text', 'icon', 'line', 'brush', 'group', 'table', 'chart'])
 const MIME_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
 
 export class FileFormatError extends Error {}
@@ -95,6 +95,10 @@ export function validObject(o: unknown): o is FigObject {
     return ok(r.start) && ok(r.end)
   }
   if (r.type === 'group') return true
+  if (r.type === 'table' || r.type === 'chart') {
+    const d = r.data as { columns?: unknown; rows?: unknown } | undefined
+    if (!d || !Array.isArray(d.columns) || !Array.isArray(d.rows)) return false
+  }
   if (r.type === 'brush') {
     return Array.isArray(r.points) && (r.points as unknown[]).every((p) => !!p && finite((p as { x: unknown }).x) && finite((p as { y: unknown }).y))
   }

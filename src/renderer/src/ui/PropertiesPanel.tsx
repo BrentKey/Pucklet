@@ -7,9 +7,12 @@ import { center } from '../model/geometry'
 import type { AlignMode } from '../model/ops'
 import { align, distribute } from '../model/ops'
 import { withTextSize } from '../model/transform'
-import type { BoxObj, BrushKind, BrushObj, Cap, Dash, EllipseObj, FigObject, Gradient, GroupObj, IconObj, Id, LineObj, RectObj, SmartSpec, TextObj } from '../model/types'
+import type { BoxObj, BrushKind, BrushObj, Cap, ChartKind, ChartObj, Dash, EllipseObj, FigObject, Gradient, GroupObj, IconObj, Id, LineObj, RectObj, SmartSpec, TableObj, TextObj } from '../model/types'
 import { regenerate } from '../model/smart'
 import { resetCrop } from '../model/crop'
+import { CHART_KINDS, LAYOUT_HELP } from './DataDialogs'
+import { CHART_COLORS } from '../render/Chart'
+import { withTableSize } from '../render/Table'
 import { BRUSH_PRESETS, circlePoints, presetFor } from '../model/brush'
 import { makeBrush } from '../model/defaults'
 import { rectOfPoints } from '../model/geometry'
@@ -136,7 +139,7 @@ function FillFields({ shapes }: { shapes: (RectObj | EllipseObj)[] }) {
 
 function StrokeFields({ objs }: { objs: (BoxObj | LineObj)[] }) {
   const ids = objs.map((o) => o.id)
-  const stroked = objs.filter((o): o is Exclude<typeof o, TextObj | IconObj> => o.type !== 'text' && o.type !== 'icon')
+  const stroked = objs.filter((o): o is Extract<typeof o, { stroke: string }> => 'stroke' in o)
   if (!stroked.length) return null
   return (
     <>
@@ -543,6 +546,178 @@ function SmartFields({ group }: { group: GroupObj }) {
   )
 }
 
+const KIND_GROUPS: { label: string; layout: string }[] = [
+  { label: 'Groups (columns = groups)', layout: 'groups' },
+  { label: 'Categories × series', layout: 'categories' },
+  { label: 'X–Y', layout: 'xy' }
+]
+
+function ChartFields({ chart }: { chart: ChartObj }) {
+  const set = (patch: Partial<ChartObj>) => updateEach<ChartObj>([chart.id], () => patch)
+  const layout = CHART_KINDS.find((k) => k.kind === chart.kind)!.layout
+  const seriesNames = layout === 'groups' ? chart.data.columns : chart.data.columns.slice(1)
+  const textInput = (key: 'title' | 'xLabel' | 'yLabel', placeholder: string) => (
+    <input
+      className="grow"
+      placeholder={placeholder}
+      value={chart[key]}
+      onFocus={() => useEditor.getState().doc.beginGesture()}
+      onBlur={() => useEditor.getState().doc.endGesture()}
+      onChange={(e) => set({ [key]: e.target.value } as Partial<ChartObj>)}
+    />
+  )
+  return (
+    <Section
+      title="Chart"
+      actions={
+        <button className="link" onClick={() => useEditor.getState().set({ dataDialog: { mode: 'edit', id: chart.id } })}>
+          Edit data…
+        </button>
+      }
+    >
+      <Row label="Type">
+        <select value={chart.kind} onChange={(e) => set({ kind: e.target.value as ChartKind })}>
+          {KIND_GROUPS.map((g) => (
+            <optgroup key={g.layout} label={g.label}>
+              {CHART_KINDS.filter((k) => k.layout === g.layout).map((k) => (
+                <option key={k.kind} value={k.kind}>
+                  {k.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </Row>
+      <p className="muted small">{LAYOUT_HELP[layout]}</p>
+      {layout === 'groups' && (chart.kind === 'bar' || chart.kind === 'dot') && (
+        <Row label="Error bars">
+          <Segmented
+            value={chart.error}
+            options={[
+              { value: 'sd', label: 'SD' },
+              { value: 'sem', label: 'SEM' },
+              { value: 'ci95', label: '95% CI' },
+              { value: 'none', label: 'None' }
+            ]}
+            onChange={(error) => set({ error })}
+          />
+        </Row>
+      )}
+      <div className="btn-row">
+        {chart.kind !== 'dot' && chart.kind !== 'scatter' && layout !== 'categories' && (
+          <label className="check small">
+            <input type="checkbox" checked={chart.showPoints} onChange={(e) => set({ showPoints: e.target.checked })} />
+            Show points
+          </label>
+        )}
+        {layout === 'xy' && (
+          <label className="check small">
+            <input type="checkbox" checked={chart.fit} onChange={(e) => set({ fit: e.target.checked })} />
+            Linear fit (R²)
+          </label>
+        )}
+        <label className="check small">
+          <input type="checkbox" checked={chart.logY} onChange={(e) => set({ logY: e.target.checked })} />
+          Log Y
+        </label>
+        {layout !== 'groups' && (
+          <label className="check small">
+            <input type="checkbox" checked={chart.legend} onChange={(e) => set({ legend: e.target.checked })} />
+            Legend
+          </label>
+        )}
+      </div>
+      <Row label="Title">{textInput('title', 'Optional')}</Row>
+      <Row label="X axis">{textInput('xLabel', layout === 'xy' ? chart.data.columns[0] : 'Optional')}</Row>
+      <Row label="Y axis">{textInput('yLabel', 'e.g. Expression (a.u.)')}</Row>
+      <Row label="Y range">
+        <NumberField title="min" value={chart.yMin} onChange={(yMin) => set({ yMin })} />
+        <NumberField title="max" value={chart.yMax} onChange={(yMax) => set({ yMax })} />
+        {(chart.yMin !== null || chart.yMax !== null) && (
+          <button className="link" onClick={() => set({ yMin: null, yMax: null })}>
+            Auto
+          </button>
+        )}
+      </Row>
+      <Row label="Text">
+        <select value={chart.fontFamily} onChange={(e) => set({ fontFamily: e.target.value })}>
+          {FONTS.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+        <NumberField value={chart.fontSize} min={6} max={72} suffix="pt" onChange={(fontSize) => set({ fontSize })} />
+      </Row>
+      <div className="brush-colors">
+        {seriesNames.map((name, i) => (
+          <span key={i} className="brush-color" title={name}>
+            <ColorField
+              value={chart.colors[i] ?? CHART_COLORS[i % CHART_COLORS.length]}
+              onChange={(c) =>
+                updateEach<ChartObj>([chart.id], (ch) => {
+                  const colors = seriesNames.map((_, j) => ch.colors[j] ?? CHART_COLORS[j % CHART_COLORS.length])
+                  colors[i] = c
+                  return { colors }
+                })
+              }
+            />
+            <span className="small muted series-name">{name}</span>
+          </span>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+function TableFields({ table }: { table: TableObj }) {
+  const set = (patch: Partial<TableObj['style']>) => updateEach<TableObj>([table.id], (t) => withTableSize({ ...t, style: { ...t.style, ...patch } }))
+  const st = table.style
+  return (
+    <Section
+      title="Table"
+      actions={
+        <button className="link" onClick={() => useEditor.getState().set({ dataDialog: { mode: 'edit', id: table.id } })}>
+          Edit data…
+        </button>
+      }
+    >
+      <Row label="Text">
+        <select value={st.fontFamily} onChange={(e) => set({ fontFamily: e.target.value })}>
+          {FONTS.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+        <NumberField value={st.fontSize} min={4} max={120} suffix="pt" onChange={(fontSize) => set({ fontSize })} />
+        <ColorField value={st.color} title="Text colour" onChange={(color) => set({ color })} />
+      </Row>
+      <Row label="Header">
+        <ColorField value={st.headerFill} allowNone title="Header fill" onChange={(headerFill) => set({ headerFill })} />
+        <ColorField value={st.headerColor} title="Header text" onChange={(headerColor) => set({ headerColor })} />
+      </Row>
+      <Row label="Stripes">
+        <ColorField value={st.stripe} allowNone title="Alternate row fill" onChange={(stripe) => set({ stripe })} />
+      </Row>
+      <Row label="Rules">
+        <NumberField value={st.borderWidth} min={0} max={10} step={0.5} suffix="px" onChange={(borderWidth) => set({ borderWidth })} />
+        <ColorField value={st.borderColor} title="Rule colour" onChange={(borderColor) => set({ borderColor })} />
+      </Row>
+      <Row label="Decimals">
+        <select value={st.decimals === null ? 'auto' : String(st.decimals)} onChange={(e) => set({ decimals: e.target.value === 'auto' ? null : Number(e.target.value) })}>
+          <option value="auto">As entered</option>
+          {[0, 1, 2, 3, 4].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </Row>
+    </Section>
+  )
+}
+
 function LineFields({ lines }: { lines: LineObj[] }) {
   const ids = lines.map((l) => l.id)
   return (
@@ -687,7 +862,7 @@ function CanvasFields({ snap }: { snap: Snapshot }) {
   )
 }
 
-const TYPE_LABEL: Record<FigObject['type'], string> = { rect: 'Rectangle', ellipse: 'Ellipse', text: 'Text', icon: 'Icon', line: 'Connector', brush: 'Brush', group: 'Group' }
+const TYPE_LABEL: Record<FigObject['type'], string> = { rect: 'Rectangle', ellipse: 'Ellipse', text: 'Text', icon: 'Icon', line: 'Connector', brush: 'Brush', table: 'Table', chart: 'Chart', group: 'Group' }
 
 export function PropertiesPanel() {
   const snap = useSnapshot()
@@ -751,6 +926,8 @@ export function PropertiesPanel() {
         <>
           <ArrangeFields ids={ids} snap={live} />
           {single?.type === 'group' && single.smart && <SmartFields group={single} />}
+          {single?.type === 'chart' && <ChartFields chart={single} />}
+          {single?.type === 'table' && <TableFields table={single} />}
           {single && isBoxObj(single) && <GeometryFields o={single} />}
           {shapes.length > 0 && (
             <Section title={shapes.length === objs.length ? 'Style' : 'Shape style'}>

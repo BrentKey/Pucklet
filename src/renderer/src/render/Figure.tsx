@@ -5,6 +5,8 @@ import { capPath, center, lineMidpoint, resolveLine } from '../model/geometry'
 import type { Asset, Dash, EllipseObj, FigObject, Gradient, IconObj, LineObj, RectObj, TextObj } from '../model/types'
 import { layoutText } from '../text/layout'
 import { BrushView } from './Brush'
+import { ChartView } from './Chart'
+import { TableView } from './Table'
 
 // The single renderer for figures. The canvas renders it live (mode 'canvas'); export renders
 // the same components to a static SVG string (mode 'export'), so what you see is what you get.
@@ -261,6 +263,10 @@ const ShapeNode = memo(function ShapeNode({ o, asset, mode }: { o: FigObject; as
       return <TextView o={o} mode={mode} />
     case 'icon':
       return <IconView o={o} asset={asset} mode={mode} />
+    case 'table':
+      return <TableView o={o} mode={mode} />
+    case 'chart':
+      return <ChartView o={o} mode={mode} />
     default:
       return null
   }

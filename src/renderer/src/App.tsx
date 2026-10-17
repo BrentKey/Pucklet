@@ -8,6 +8,7 @@ import { PropertiesPanel } from './ui/PropertiesPanel'
 import { TopBar } from './ui/TopBar'
 import { PagesBar } from './ui/PagesBar'
 import { ShortcutsDialog } from './ui/ShortcutsDialog'
+import { DataDialogs } from './ui/DataDialogs'
 import { loadPrefs } from './app/prefs'
 
 export function App() {
@@ -34,6 +35,7 @@ export function App() {
       </div>
       {exportOpen && <ExportDialog />}
       {shortcutsOpen && <ShortcutsDialog />}
+      <DataDialogs />
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

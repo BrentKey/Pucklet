@@ -7,6 +7,7 @@ const api = {
   saveFile: (args: { path?: string; suggestedName: string; data: Uint8Array }) =>
     ipcRenderer.invoke('file:save', args),
   importFiles: () => ipcRenderer.invoke('file:import'),
+  openDataFile: () => ipcRenderer.invoke('file:openData'),
   exportFile: (args: { suggestedName: string; data: Uint8Array }) => ipcRenderer.invoke('file:export', args),
   svgToPdf: (pages: { svg: string; widthIn: number; heightIn: number }[]) => ipcRenderer.invoke('export:pdf', pages),
   readUserData: (name: string) => ipcRenderer.invoke('userdata:read', name),

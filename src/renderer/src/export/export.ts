@@ -42,7 +42,10 @@ export function creditText(credits: Credit[]): string {
     return `${c.names.join(', ')}${who} (${c.library}, ${licenseLabel(c.license)})`
   })
   const lead = needed.length ? 'Icons adapted from: ' : 'Icons (public domain / CC0, no attribution required): '
-  return lead + parts.join('; ') + '.'
+  const sa = credits.some((c) => /-sa\b|by-sa/i.test(c.license))
+    ? ' This figure includes share-alike (CC BY-SA) material and must be shared under CC BY-SA.'
+    : ''
+  return lead + parts.join('; ') + '.' + sa
 }
 
 export function licenseLabel(l: string): string {

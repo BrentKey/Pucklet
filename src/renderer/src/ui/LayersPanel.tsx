@@ -13,6 +13,8 @@ const TYPE_LABEL: Record<FigObject['type'], string> = {
   icon: 'Icon',
   line: 'Connector',
   brush: 'Brush',
+  table: 'Table',
+  chart: 'Chart',
   group: 'Group'
 }
 

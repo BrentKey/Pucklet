@@ -14,6 +14,8 @@ export interface Platform {
   /** Saves to `path` when given, otherwise asks where. Returns where it went, or null if cancelled. */
   saveFile(data: Uint8Array, suggestedName: string, path?: string): Promise<{ name: string; path?: string } | null>
   importFiles(): Promise<OpenedFile[]>
+  /** CSV / TSV / Excel file for charts and tables. */
+  openDataFile(): Promise<OpenedFile | null>
   exportFile(data: Uint8Array, suggestedName: string): Promise<boolean>
   /** Vector PDF with one page per standalone SVG (desktop only). */
   svgToPdf?(pages: { svg: string; widthIn: number; heightIn: number }[]): Promise<Uint8Array>
@@ -30,6 +32,7 @@ interface NativeApi {
   openFile(): Promise<OpenedFile | null>
   saveFile(args: { path?: string; suggestedName: string; data: Uint8Array }): Promise<{ name: string; path: string } | null>
   importFiles(): Promise<OpenedFile[]>
+  openDataFile(): Promise<OpenedFile | null>
   exportFile(args: { suggestedName: string; data: Uint8Array }): Promise<{ name: string; path: string } | null>
   svgToPdf(pages: { svg: string; widthIn: number; heightIn: number }[]): Promise<Uint8Array>
   readUserData(name: string): Promise<string | null>
@@ -52,6 +55,7 @@ function electronPlatform(n: NativeApi): Platform {
     openFile: () => n.openFile(),
     saveFile: (data, suggestedName, path) => n.saveFile({ data, suggestedName, path }),
     importFiles: () => n.importFiles(),
+    openDataFile: () => n.openDataFile(),
     exportFile: async (data, suggestedName) => (await n.exportFile({ data, suggestedName })) !== null,
     svgToPdf: (pages) => n.svgToPdf(pages),
     readUserData: (name) => n.readUserData(name),
@@ -96,6 +100,7 @@ function webPlatform(): Platform {
       return { name: suggestedName }
     },
     importFiles: () => pickFiles('.svg,.png,.jpg,.jpeg,.webp,.gif', true),
+    openDataFile: async () => (await pickFiles('.csv,.tsv,.txt,.xlsx,.xlsm', false))[0] ?? null,
     exportFile: async (data, name) => {
       download(data, name)
       return true

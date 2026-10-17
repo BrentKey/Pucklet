@@ -214,6 +214,14 @@ export const Icon = {
       <rect x="3" y="3" width="18" height="18" rx="2" />
     </I>
   ),
+  chart: () => (
+    <I>
+      <path d="M4 4v16h16" />
+      <rect x="7" y="11" width="3" height="6" />
+      <rect x="12" y="7" width="3" height="10" />
+      <rect x="17" y="13" width="2.5" height="4" />
+    </I>
+  ),
   layers: () => (
     <I>
       <path d="M12 3l9 5-9 5-9-5z" />

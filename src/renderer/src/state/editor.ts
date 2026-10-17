@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { create } from 'zustand'
 import { FigureDoc, newId, Snapshot } from '../model/doc'
+import type { ParsedSheet } from '../model/data'
 import type { BrushKind, Cap, FigObject, Id, Route } from '../model/types'
 
 export type Tool = 'select' | 'hand' | 'rect' | 'ellipse' | 'text' | 'line' | 'arrow' | 'brush'
@@ -12,9 +13,11 @@ export interface Prefs {
   snapToGrid: boolean
   gridSize: number
   showRulers: boolean
+  /** Show icons under share-alike licences (CC BY-SA), which bind the whole figure to the same licence. */
+  shareAlike: boolean
 }
 
-export const DEFAULT_PREFS: Prefs = { showGrid: false, snapToGrid: false, gridSize: 20, showRulers: true }
+export const DEFAULT_PREFS: Prefs = { showGrid: false, snapToGrid: false, gridSize: 20, showRulers: true, shareAlike: false }
 
 export interface View {
   zoom: number
@@ -72,6 +75,8 @@ interface EditorState {
   /** View preferences, remembered between sessions. */
   prefs: Prefs
   shortcutsOpen: boolean
+  /** Data import dialog (with already-parsed sheets when a file was dropped or pasted), or the data editor for an object. */
+  dataDialog: { mode: 'import'; sheets?: ParsedSheet[]; at?: { x: number; y: number } } | { mode: 'edit'; id: Id } | null
 
   set: (patch: Partial<EditorState>) => void
   select: (ids: Id[]) => void
@@ -129,6 +134,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   toast: null,
   prefs: DEFAULT_PREFS,
   shortcutsOpen: false,
+  dataDialog: null,
 
   set: (patch) => set(patch),
   select: (ids) => set((st) => ({ selection: ids, cropping: st.cropping && ids.length === 1 && ids[0] === st.cropping ? st.cropping : null })),

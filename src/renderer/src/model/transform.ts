@@ -4,6 +4,7 @@ import { center, normalizeAngle, resolveLine, rotate } from './geometry'
 import type { FigObject, Id, LineObj, TextObj } from './types'
 import { isBoxObj } from './types'
 import { layoutText } from '../text/layout'
+import { withTableSize } from '../render/Table'
 
 // Pure transforms. Each returns new versions of the affected objects keyed by id, so the same
 // code drives the live preview during a drag and the final commit.
@@ -72,6 +73,12 @@ export function scaleAbout(snap: Snapshot, ids: Iterable<Id>, anchor: Pt, sx: nu
     }
     if (!isBoxObj(o)) continue
     const c = sp(center(o))
+    if (o.type === 'table') {
+      const k = Math.sqrt(Math.abs(sx * sy))
+      const t = withTableSize({ ...o, style: { ...o.style, fontSize: Math.max(4, Math.round(o.style.fontSize * k * 10) / 10) } })
+      out.set(o.id, { ...t, x: c.x - t.w / 2, y: c.y - t.h / 2 })
+      continue
+    }
     if (o.type === 'text') {
       const fontSize = Math.max(1, Math.round(o.fontSize * Math.sqrt(Math.abs(sx * sy)) * 10) / 10)
       const t = withTextSize({ ...o, fontSize, ...(o.wrap ? { wrap: o.wrap * Math.abs(sx) } : {}) })

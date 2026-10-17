@@ -1,6 +1,10 @@
 import { newId } from './doc'
 import type { Asset, BrushKind, BrushObj, Cap, EllipseObj, IconObj, LineObj, RectObj, Route, TextObj } from './types'
 import { presetFor } from './brush'
+import type { ChartKind, ChartObj, DataTable, TableObj } from './types'
+import type { DataShape } from './data'
+import { guessShape } from './data'
+import { DEFAULT_TABLE_STYLE, withTableSize } from '../render/Table'
 import { withTextSize } from './transform'
 
 /** Fonts available on both macOS and Windows, so figures look the same everywhere. */
@@ -92,4 +96,41 @@ export function makeIcon(z: string, asset: Asset, cx: number, cy: number, maxSiz
 export function makeBrush(z: string, kind: BrushKind, points: { x: number; y: number }[], closed: boolean): BrushObj {
   const p = presetFor(kind)
   return { ...base(z), type: 'brush', kind, points, closed, smooth: true, spacing: p.spacing, thickness: p.thickness, colors: [...p.colors], flip: false }
+}
+
+export function makeTable(z: string, data: DataTable, cx: number, cy: number): TableObj {
+  const t = withTableSize({ ...base(z), type: 'table' as const, data, style: { ...DEFAULT_TABLE_STYLE }, x: 0, y: 0, w: 1, h: 1, rotation: 0, name: 'Table' })
+  return { ...t, x: cx - t.w / 2, y: cy - t.h / 2 }
+}
+
+const KIND_FOR_SHAPE: Record<DataShape, ChartKind> = { groups: 'bar', categories: 'grouped', xy: 'line' }
+
+export function makeChart(z: string, data: DataTable, cx: number, cy: number, kind?: ChartKind): ChartObj {
+  const w = 480
+  const h = 340
+  return {
+    ...base(z),
+    type: 'chart',
+    name: 'Chart',
+    kind: kind ?? KIND_FOR_SHAPE[guessShape(data)],
+    data,
+    error: 'sd',
+    showPoints: true,
+    colors: [],
+    title: '',
+    xLabel: '',
+    yLabel: '',
+    fontFamily: 'Arial',
+    fontSize: 14,
+    yMin: null,
+    yMax: null,
+    logY: false,
+    legend: true,
+    fit: false,
+    x: cx - w / 2,
+    y: cy - h / 2,
+    w,
+    h,
+    rotation: 0
+  }
 }

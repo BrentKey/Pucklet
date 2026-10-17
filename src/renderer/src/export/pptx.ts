@@ -4,6 +4,8 @@ import type { Snapshot } from '../model/doc'
 import { lineMidpoint, objectBounds, resolveLine } from '../model/geometry'
 import type { Cap, Dash, FigObject, LineObj, TextObj } from '../model/types'
 import { Node } from '../render/Figure'
+import { layoutTable } from '../render/Table'
+import { formatCell } from '../model/data'
 import { creditsFor, creditText, svgToPng } from './export'
 
 // PowerPoint export. Text, rectangles, ellipses and straight connectors become native,
@@ -140,6 +142,38 @@ async function addSlide(pptx: InstanceType<typeof import('pptxgenjs').default>, 
         rotate: o.rotation || undefined,
         transparency: transparency || undefined
       })
+      continue
+    }
+    if (o.type === 'table' && !o.rotation) {
+      // Native PowerPoint table, so the numbers stay editable.
+      const l = layoutTable(o)
+      const st = o.style
+      const sc = o.h / l.h
+      const border = st.borderWidth > 0 ? { type: 'solid', pt: st.borderWidth * PT * k, color: hex(st.borderColor) } : { type: 'none' }
+      const none = { type: 'none' }
+      const cell = (text: string, i: number, row: number) => ({
+        text,
+        options: {
+          bold: row === 0,
+          color: hex(row === 0 ? st.headerColor : st.color),
+          align: l.numeric[i] ? 'right' : 'left',
+          fill: row === 0 && st.headerFill !== 'none' ? { color: hex(st.headerFill) } : st.stripe !== 'none' && row > 0 && row % 2 === 0 ? { color: hex(st.stripe) } : undefined,
+          // Publication rules: line above and below the header, and under the last row.
+          border: [row === 0 ? border : none, none, row === 0 || row === o.data.rows.length ? border : none, none]
+        }
+      })
+      const rows = [o.data.columns.map((c, i) => cell(c, i, 0)), ...o.data.rows.map((r, ri) => o.data.columns.map((_, i) => cell(formatCell(r[i] ?? null, st.decimals), i, ri + 1)))]
+      slide.addTable(rows as never, {
+        x: X(o.x),
+        y: Y(o.y),
+        w: o.w / IN,
+        colW: l.colW.map((w) => (w * sc) / IN),
+        rowH: (l.rowH * sc) / IN,
+        fontFace: st.fontFamily,
+        fontSize: st.fontSize * sc * PT * k,
+        margin: (l.padX * sc * PT * k) / 1.5,
+        valign: 'middle'
+      } as never)
       continue
     }
     if ((o.type === 'rect' || o.type === 'ellipse') && !o.gradient) {

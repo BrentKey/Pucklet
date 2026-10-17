@@ -78,6 +78,7 @@ function buildMenu(): void {
         { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: cmd('file.saveAs') },
         { type: 'separator' },
         { label: 'Import Image or SVG…', accelerator: 'CmdOrCtrl+Shift+I', click: cmd('file.import') },
+        { label: 'Insert Chart or Table (CSV / Excel)…', accelerator: 'CmdOrCtrl+Shift+D', click: cmd('file.importData') },
         { label: 'Export…', accelerator: 'CmdOrCtrl+E', click: cmd('file.export') },
         ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'quit' as const }])
       ]
@@ -155,6 +156,17 @@ function registerIpc(): void {
     }
     await writeFile(path, args.data)
     return { path, name: basename(path) }
+  })
+
+  ipcMain.handle('file:openData', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)!
+    const res = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'Data', extensions: ['csv', 'tsv', 'txt', 'xlsx', 'xlsm'] }]
+    })
+    if (res.canceled || !res.filePaths[0]) return null
+    const path = res.filePaths[0]
+    return { path, name: basename(path), data: new Uint8Array(await readFile(path)) }
   })
 
   ipcMain.handle('file:import', async (e) => {

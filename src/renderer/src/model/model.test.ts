@@ -367,3 +367,16 @@ describe('multi-page files', () => {
     expect(pages[0].data.objects).toHaveLength(1)
   })
 })
+
+describe('charts and tables in files', () => {
+  it('round-trip through the .pucklet format', async () => {
+    const { makeChart, makeTable } = await import('./defaults')
+    const { SAMPLE_GROUPS, SAMPLE_TABLE } = await import('./data')
+    const chart = { ...makeChart('a0', SAMPLE_GROUPS, 200, 200, 'box'), id: 'c' }
+    const table = { ...makeTable('a1', SAMPLE_TABLE, 600, 200), id: 't' }
+    expect(table.w).toBeGreaterThan(50)
+    expect(table.h).toBeCloseTo(table.style.fontSize * 1.7 * 5, 0)
+    const back = deserialize(serialize({ meta: { width: 800, height: 400, background: '#ffffff' }, objects: [chart, table], assets: [] }))
+    expect(back.objects).toEqual([chart, table])
+  })
+})

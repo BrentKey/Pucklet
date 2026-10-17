@@ -165,7 +165,63 @@ export interface GroupObj extends BaseObj {
   smart?: SmartSpec
 }
 
-export type BoxObj = RectObj | EllipseObj | TextObj | IconObj
+export type Cell = string | number | null
+
+export interface DataTable {
+  columns: string[]
+  rows: Cell[][]
+}
+
+export interface TableStyle {
+  fontFamily: string
+  fontSize: number
+  color: Color
+  headerFill: Color
+  headerColor: Color
+  /** Fill for every other body row, or 'none'. */
+  stripe: Color
+  borderColor: Color
+  borderWidth: number
+  /** Number of decimals for numbers; null shows them as entered. */
+  decimals: number | null
+}
+
+/** A data table. Its w/h follow from the content (see render/Table.tsx); resizing scales the font. */
+export interface TableObj extends BaseObj, Box {
+  type: 'table'
+  data: DataTable
+  style: TableStyle
+}
+
+export type ChartKind = 'bar' | 'dot' | 'box' | 'violin' | 'grouped' | 'stacked' | 'scatter' | 'line'
+
+/**
+ * A chart drawn from its own data table.
+ * - bar / dot / box / violin: each column is a group, rows are replicates.
+ * - grouped / stacked: first column holds category labels, other columns are series.
+ * - scatter / line: first column is X, other columns are Y series.
+ */
+export interface ChartObj extends BaseObj, Box {
+  type: 'chart'
+  kind: ChartKind
+  data: DataTable
+  error: 'sd' | 'sem' | 'ci95' | 'none'
+  showPoints: boolean
+  colors: Color[]
+  title: string
+  xLabel: string
+  yLabel: string
+  fontFamily: string
+  fontSize: number
+  yMin: number | null
+  yMax: number | null
+  logY: boolean
+  legend: boolean
+  /** scatter / line: draw a least-squares line per series. */
+  fit: boolean
+}
+
+export type BoxObj = RectObj | EllipseObj | TextObj | IconObj | TableObj | ChartObj
 export type FigObject = BoxObj | LineObj | BrushObj | GroupObj
 export type ObjType = FigObject['type']
 
@@ -196,5 +252,5 @@ export interface CanvasMeta {
 }
 
 export function isBoxObj(o: FigObject): o is BoxObj {
-  return o.type === 'rect' || o.type === 'ellipse' || o.type === 'text' || o.type === 'icon'
+  return o.type === 'rect' || o.type === 'ellipse' || o.type === 'text' || o.type === 'icon' || o.type === 'table' || o.type === 'chart'
 }

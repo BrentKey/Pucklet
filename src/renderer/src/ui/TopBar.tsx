@@ -106,6 +106,7 @@ function FileMenu() {
           {platform.kind === 'electron' && item('Save as…', 'file.saveAs', `${mod}⇧S`)}
           <hr />
           {item('Import image or SVG…', 'file.import', `${mod}⇧I`)}
+          {item('Chart or table from data…', 'file.importData', `${mod}⇧D`)}
           {item('Export…', 'file.export', `${mod}E`)}
         </div>
       )}
@@ -142,6 +143,9 @@ export function TopBar() {
             <t.icon />
           </IconButton>
         ))}
+        <IconButton title="Chart or table from data (CSV, Excel, paste) — ⇧⌘D" onClick={commands['file.importData']}>
+          <Icon.chart />
+        </IconButton>
         <span className="toolbar-sep" />
         {tool === 'brush' ? (
           <select

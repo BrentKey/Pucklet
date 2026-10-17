@@ -15,7 +15,7 @@ Requires Node 22+.
 
 ```bash
 npm install
-npm run icons      # downloads and optimizes the icon libraries: Bioicons, Reactome, PhyloPic (~5,100 icons; ~10 minutes)
+npm run icons      # downloads and optimizes the icon libraries (~11,500 icons from 10 sources; allow 20–30 minutes)
 npm run dev        # desktop app (Electron) with hot reload
 ```
 
@@ -28,7 +28,7 @@ Other scripts:
 | `npm run typecheck` | Type-checks main, preload and renderer. |
 | `npm run build` / `npm start` | Production build, then runs it. |
 | `npm run dist:mac` / `npm run dist:win` | Builds an installer (`dist/Pucklet-<version>.dmg` / `.exe`). The Mac build is unsigned for now. |
-| `npm run icons:bioicons` / `icons:reactome` / `icons:phylopic` | Rebuild a single library (`icons:phylopic -- --all` fetches every suitably licensed PhyloPic silhouette, ~12k). |
+| `npm run icons:<library>` | Rebuild a single library, e.g. `icons:reactome`, `icons:healthicons`, `icons:iconify-science` (see package.json; `icons:phylopic -- --all` fetches every suitably licensed PhyloPic silhouette, ~12k). |
 | `npm run icon` | Re-renders `build/icon.png` from `build/icon.svg` after editing the app icon. |
 | `PUCKLET_SMOKE_DIR=/some/dir npx electron .` | After `npm run build`: launches the app, saves a screenshot, a test PDF and a JSON report to that directory, then quits. |
 
@@ -44,9 +44,10 @@ Other scripts:
 - **Smart protocol & timeline builders**: type one step or event per line ("Day 7: Start treatment") and Pucklet lays out numbered markers, labels and connected arrows. Change the steps, direction (across/down), numbering or colour at any time from the right panel and the group rebuilds itself.
 - **Pages**: a file can hold several pages (figures, slides, supplementary panels) — add, duplicate, rename, reorder and delete from the bar under the canvas. PDF and PowerPoint export all pages at once.
 - **View**: rulers (⇧R), grid (⌘') with optional snap-to-grid, and a keyboard shortcut sheet (?).
+- **Charts & tables from data** (⇧⌘D, the chart button, or drop/paste a spreadsheet): import CSV, TSV or Excel (.xlsx, any sheet) or paste cells from Excel, Google Sheets or Prism. Charts: bar (mean ± SD/SEM/95% CI with individual points), dot, box and violin plots for grouped data; grouped and stacked bars for categories; scatter and line plots with optional linear fit and R². Edit the data in a built-in spreadsheet editor at any time; set axis titles, ranges, log scale, colours and fonts. Tables use publication-style rules, right-align numbers and can round to fixed decimals. Everything exports as vectors; in PowerPoint, tables stay editable.
 - **Multi-panel figures**: one-click layouts (2, 3, 2×2, 3×2, large + small…) with panel letters in A / a / (a) / A. / a) style, plus "Re-letter panels" to renumber in reading order after you rearrange.
 - **Text**: click with the Text tool for a box that grows, or drag to make a fixed-width box that wraps (side handles change the width). Rich text with bold/italic/underline/colour, super/subscript (⇧⌘= / ⌘=), Greek & symbol palette, alignment and line height.
-- **Icons & images**: ~5,100 icons from Bioicons, Reactome and PhyloPic — search (best matches first), filter by library and category, drag or click to place, recolour per colour layer, flip, crop (double-click; rectangle, rounded or circle shapes), "select all copies".
+- **Icons & images**: ~11,500 openly licensed icons from 10 libraries — Bioicons, Reactome, PhyloPic, Health Icons, SciDraw, SwissBioPics, EBI anatomograms, Arcadia, Iconify science pictograms, and (opt-in, share-alike) BioDraws. Search (best matches first), filter by library and category, drag or click to place, recolour per colour layer, flip, crop (double-click; rectangle, rounded or circle), "select all copies".
 - **Shapes**: gradient fills (linear or radial) as well as solid.
 - **Import**: SVG, PNG, JPG, GIF, WebP via dialog, drag-and-drop or paste.
 - **Copy/paste**: copied objects go to the clipboard as SVG (paste into Inkscape/Illustrator/text editors); paste SVG markup or images from other apps.
@@ -92,11 +93,13 @@ research/            BioRender feature, UX and community research
 
 ## Icon licensing
 
+Share-alike (CC BY-SA) libraries such as BioDraws are hidden unless you tick "Include share-alike libraries" in the Icons panel; figures using them get a note in the credit line.
+
 `npm run icons` includes only CC0, MIT, BSD, CC BY 3.0 and CC BY 4.0 icons from [Bioicons](https://bioicons.com). Add `-- --include-sa` to also include CC BY-SA icons, which carry share-alike obligations. Each icon's author and licence travels with it into your `.pucklet` file and the export credit line.
 
 ## Known gaps / next steps
 
-- **Icons**: Bioicons is ~105 MB after SVGO (much of it detailed Servier artwork); Reactome adds ~17 MB, PhyloPic <1 MB. NIH BioArt has no public API and is PNG-only, so it isn't included yet. See `research/icon-sourcing.md` for paper-sourced and AI-generated icon options.
+- **Icons**: TogoTV and OpenClipart scripts exist but are slow (`npm run icons:togotv`, `icons:openclipart-science`) and aren't part of `npm run icons` yet. NIH BioArt has no public API and is PNG-only. See `research/icon-sourcing.md` for paper-sourced and AI-generated icon options.
 - **More templates**: e.g. immune cell interactions, CRISPR workflow, organ-level figures. They're easy to add in `src/renderer/src/library/templates.ts`.
 - **Editing polish**: editing rotated text in place, brush colour presets.
 - **Packaging**: the Mac app is unsigned, so macOS warns on first launch (right-click the app → Open). Signing/notarisation needs an Apple Developer ID ($99/year); Windows signing needs a code-signing certificate. Auto-update is not set up.
