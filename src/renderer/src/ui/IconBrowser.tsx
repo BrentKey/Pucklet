@@ -192,6 +192,12 @@ export function IconLibrary() {
             ))}
         </select>
       </div>
+      {all.some((i) => isShareAlike(i.icon.license)) && (
+        <label className="check small pad sa-toggle" title="CC BY-SA icons require you to release the figure under the same licence. Most journals accept this, but check before publishing.">
+          <input type="checkbox" checked={shareAlike} onChange={(e) => setPrefs({ shareAlike: e.target.checked })} />
+          Include share-alike (CC BY-SA) libraries
+        </label>
+      )}
       {(path.cat || searching) && (
         <div className="crumbs">
           <button className="link" onClick={() => (setPath({}), setQuery(''))}>
@@ -285,13 +291,6 @@ export function IconLibrary() {
             </div>
           </>
         )
-      )}
-
-      {all.some((i) => isShareAlike(i.icon.license)) && (
-        <label className="check small pad sa-toggle" title="CC BY-SA icons require you to release the figure under the same licence. Most journals accept this, but check before publishing.">
-          <input type="checkbox" checked={shareAlike} onChange={(e) => setPrefs({ shareAlike: e.target.checked })} />
-          Include share-alike (CC BY-SA) libraries
-        </label>
       )}
     </div>
   )

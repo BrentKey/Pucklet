@@ -1359,7 +1359,8 @@ button.on-btn {
   font-size: 16px;
 }
 .sa-toggle {
-  margin-top: 8px;
+  margin: 6px 0 2px;
+  padding: 0 10px;
 }
 .cat-card .cat-thumbs img {
   width: calc((100% - 8px) / 3);
