@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { viewportCenter } from '../library/place'
 import type { Cell, DataTable, ParsedSheet } from '../model/data'
-import { formatCell, guessHeader, guessShape, looksTabular, parseDelimited, parseFile, SAMPLE_GROUPS, SAMPLE_TABLE, toCell, toTable } from '../model/data'
+import { formatCell, guessHeader, guessShape, looksTabular, parseDelimited, parseFile, SAMPLE_GROUPS, SAMPLE_TABLE, SAMPLES, toCell, toTable } from '../model/data'
 import { makeChart, makeTable } from '../model/defaults'
 import type { ChartKind, ChartObj, TableObj } from '../model/types'
 import { platform } from '../platform'
@@ -13,20 +13,36 @@ export const CHART_KINDS: { kind: ChartKind; label: string; layout: string }[] =
   { kind: 'dot', label: 'Dot plot (points, mean ± error)', layout: 'groups' },
   { kind: 'box', label: 'Box plot', layout: 'groups' },
   { kind: 'violin', label: 'Violin plot', layout: 'groups' },
+  { kind: 'meanline', label: 'Mean ± error line', layout: 'groups' },
+  { kind: 'histogram', label: 'Histogram', layout: 'groups' },
   { kind: 'grouped', label: 'Grouped bars', layout: 'categories' },
   { kind: 'stacked', label: 'Stacked bars', layout: 'categories' },
+  { kind: 'pie', label: 'Pie chart', layout: 'parts' },
+  { kind: 'donut', label: 'Donut chart', layout: 'parts' },
   { kind: 'scatter', label: 'Scatter (X–Y)', layout: 'xy' },
-  { kind: 'line', label: 'Line (X–Y)', layout: 'xy' }
+  { kind: 'line', label: 'Line (X–Y)', layout: 'xy' },
+  { kind: 'heatmap', label: 'Heatmap', layout: 'matrix' },
+  { kind: 'plate', label: 'Well-plate heatmap', layout: 'plate' },
+  { kind: 'survival', label: 'Survival (Kaplan–Meier)', layout: 'survival' },
+  { kind: 'volcano', label: 'Volcano plot', layout: 'volcano' }
 ]
 
 export const LAYOUT_HELP: Record<string, string> = {
   groups: 'Each column is a group; each row is a replicate.',
   categories: 'First column: category names. Other columns: one series each.',
-  xy: 'First column: X values. Other columns: one Y series each.'
+  parts: 'First column: slice names. Second column: values.',
+  xy: 'First column: X values. Other columns: one Y series each.',
+  matrix: 'First column: row names. Other columns: one column of the heatmap each.',
+  plate: 'Either a grid (row letters A–H down the first column, plate columns 1–12 across) or two columns: Well (A1, A2…) and Value. 6- to 384-well plates.',
+  survival: 'Columns: Time, Event (1 = event, 0 = censored), and optionally Group.',
+  volcano: 'Columns: Gene/label, log2 fold change, p-value.'
 }
 
+/** Which layout a data shape (from guessShape) fits. */
+export const SHAPE_LAYOUT: Record<string, string> = { groups: 'groups', categories: 'categories', xy: 'xy', plate: 'plate', survival: 'survival', volcano: 'volcano' }
+
 const PREVIEW_ROWS = 8
-const KIND_FOR: Record<string, ChartKind> = { groups: 'bar', categories: 'grouped', xy: 'line' }
+const KIND_FOR: Record<string, ChartKind> = { groups: 'bar', categories: 'grouped', xy: 'line', plate: 'plate', survival: 'survival', volcano: 'volcano' }
 
 async function pickData(): Promise<ParsedSheet[] | null> {
   const f = await platform.openDataFile()
@@ -125,7 +141,20 @@ export function ImportDataDialog({ initial, at }: { initial?: ParsedSheet[]; at?
             </div>
             <div className="btn-row">
               <span className="muted small">No data yet?</span>
-              <button onClick={() => insert(SAMPLE_GROUPS, 'chart', 'bar')}>Example chart</button>
+              <select
+                value=""
+                onChange={(e) => {
+                  const k = CHART_KINDS.find((x) => x.kind === e.target.value)
+                  if (k) insert(SAMPLES[k.layout] ?? SAMPLE_GROUPS, 'chart', k.kind)
+                }}
+              >
+                <option value="">Example chart…</option>
+                {CHART_KINDS.map((k) => (
+                  <option key={k.kind} value={k.kind}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
               <button onClick={() => insert(SAMPLE_TABLE, 'table', 'bar')}>Example table</button>
             </div>
           </div>
@@ -163,7 +192,7 @@ export function ImportDataDialog({ initial, at }: { initial?: ParsedSheet[]; at?
                     {CHART_KINDS.map((k) => (
                       <option key={k.kind} value={k.kind}>
                         {k.label}
-                        {k.layout === shape ? '  ✓ fits this data' : ''}
+                        {k.layout === SHAPE_LAYOUT[shape] ? '  ✓ fits this data' : ''}
                       </option>
                     ))}
                   </select>

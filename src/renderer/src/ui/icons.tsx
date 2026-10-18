@@ -214,6 +214,12 @@ export const Icon = {
       <rect x="3" y="3" width="18" height="18" rx="2" />
     </I>
   ),
+  table: () => (
+    <I>
+      <rect x="3" y="4" width="18" height="16" rx="1.5" />
+      <path d="M3 9h18M3 14.5h18M9 9v11M15 9v11" />
+    </I>
+  ),
   chart: () => (
     <I>
       <path d="M4 4v16h16" />

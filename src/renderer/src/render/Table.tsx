@@ -24,13 +24,29 @@ export function layoutTable(t: Pick<TableObj, 'data' | 'style'>): TableLayout {
   const colW = columns.map((c, i) => {
     let w = textWidth(c, fs, s.fontFamily, true)
     for (const r of rows) w = Math.max(w, textWidth(formatCell(r[i] ?? null, s.decimals), fs, s.fontFamily))
-    return Math.ceil(w + padX * 2)
+    // Empty columns still get room to type into.
+    return Math.ceil(Math.max(w, fs * 4) + padX * 2)
   })
   const numeric = columns.map((_, i) => {
     const filled = rows.map((r) => r[i]).filter((c) => c !== null)
     return filled.length > 0 && filled.filter(isNum).length / filled.length >= 0.6
   })
   return { colW, rowH, padX, numeric, w: Math.max(1, colW.reduce((a, b) => a + b, 0)), h: Math.ceil(rowH * (rows.length + 1)) }
+}
+
+/** Cell rectangle in the table's own (unscaled) coordinates; row 0 is the header. */
+export function cellRect(l: TableLayout, row: number, col: number): { x: number; y: number; w: number; h: number } {
+  const x = l.colW.slice(0, col).reduce((a, b) => a + b, 0)
+  return { x, y: row * l.rowH, w: l.colW[col] ?? 0, h: l.rowH }
+}
+
+/** Which cell a point (in table coordinates) falls in. */
+export function cellAt(l: TableLayout, px: number, py: number): { row: number; col: number } | null {
+  if (px < 0 || py < 0 || px > l.w || py > l.h) return null
+  let x = 0
+  let col = 0
+  while (col < l.colW.length - 1 && px > x + l.colW[col]) x += l.colW[col++]
+  return { row: Math.min(Math.floor(py / l.rowH), Math.round(l.h / l.rowH) - 1), col }
 }
 
 /** Returns the table with w/h matching its content. */

@@ -9,7 +9,8 @@ import type { Changes, Handle } from '../model/transform'
 import { resizeBox, rotateAbout, scaleAbout, translate, withTextSize } from '../model/transform'
 import type { BrushObj, FigObject, IconObj, Id, LineObj, TextObj } from '../model/types'
 import { cropPan, cropResize } from '../model/crop'
-import { withTableSize } from '../render/Table'
+import { cellAt, layoutTable, withTableSize } from '../render/Table'
+import { TableCellEditor } from './TableCellEditor'
 import { isBoxObj } from '../model/types'
 import { SceneContent } from '../render/Figure'
 import { useEditor, useLiveSnapshot, useSnapshot } from '../state/editor'
@@ -188,6 +189,7 @@ export function Canvas() {
     if (e.button === 2) return
     const s = useEditor.getState()
     if (s.editingText) return // the text editor commits on blur
+    if (s.editingCell) return // so does the table cell editor
     wrapRef.current!.setPointerCapture(e.pointerId)
     const p = toWorld(e.clientX, e.clientY)
     const base = s.doc.snapshot()
@@ -593,6 +595,16 @@ export function Canvas() {
       if (child?.type === 'text' && !child.locked) s.set({ editingText: child.id })
     } else if (o.type === 'text' && !o.locked) {
       s.set({ editingText: o.id, selection: [o.id] })
+    } else if (o.type === 'table' && !o.locked) {
+      if (o.rotation) {
+        s.set({ dataDialog: { mode: 'edit', id: o.id } })
+        return
+      }
+      // Find the cell under the pointer and type into it right there.
+      const p = toWorld(e.clientX, e.clientY)
+      const l = layoutTable(o)
+      const hit = cellAt(l, ((p.x - o.x) * l.w) / o.w, ((p.y - o.y) * l.h) / o.h)
+      if (hit) s.set({ selection: [o.id], editingCell: { id: o.id, ...hit } })
     } else if (o.type === 'line' && !o.locked) {
       s.set({ selection: [o.id] })
       requestAnimationFrame(() => (document.getElementById('connector-label') as HTMLInputElement | null)?.focus())
@@ -661,6 +673,7 @@ export function Canvas() {
         </g>
       </svg>
       {editingText && <TextEditor key={editingText} id={editingText} />}
+      <TableCellEditor />
       <Rulers />
     </div>
   )

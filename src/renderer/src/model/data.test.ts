@@ -82,3 +82,58 @@ describe('statistics', () => {
     expect(fit.r2).toBeCloseTo(1)
   })
 })
+
+describe('more chart data', () => {
+  it('estimates Kaplan–Meier survival with censoring', async () => {
+    const { kaplanMeier } = await import('../render/ChartExtra')
+    const km = kaplanMeier([1, 2, 2, 3, 4], [true, true, false, true, false])
+    // n=5: t1 1 death → 0.8; t2 1 death of 4 at risk → 0.6 (1 censored); t3 1 of 2 → 0.3; t4 censored.
+    expect(km.map((p) => Math.round(p.s * 100) / 100)).toEqual([1, 0.8, 0.6, 0.3, 0.3])
+    expect(km[km.length - 1].censored).toBe(true)
+  })
+
+  it('reads plates as a grid or as a list of wells', async () => {
+    const { plateData } = await import('../render/ChartExtra')
+    const grid = toTable(parseDelimited(',1,2,3\nA,1,2,3\nB,4,5,6'), true)
+    expect(plateData(grid)).toMatchObject({ rows: 2, cols: 3 })
+    expect(plateData(grid).values).toEqual([[1, 2, 3], [4, 5, 6]])
+    const list = toTable(parseDelimited('Well,OD\nA1,0.5\nH12,1.5\nC03,0.7'), true)
+    const p = plateData(list)
+    expect([p.rows, p.cols]).toEqual([8, 12])
+    expect(p.values[0][0]).toBe(0.5)
+    expect(p.values[7][11]).toBe(1.5)
+    expect(p.values[2][2]).toBe(0.7)
+  })
+
+  it('recognises plate, survival and volcano data', () => {
+    expect(guessShape(toTable(parseDelimited('Well,Value\nA1,1\nA2,2\nA3,3\nB1,4\nB2,5\nB3,6'), true))).toBe('plate')
+    expect(guessShape(toTable(parseDelimited('Days,Status,Arm\n3,1,A\n5,0,B'), true))).toBe('survival')
+    expect(guessShape(toTable(parseDelimited('Gene,log2FC,padj\nX,1,0.01\nY,-2,0.2'), true))).toBe('volcano')
+  })
+})
+
+describe('tables on the canvas', () => {
+  it('edits cells, headers, rows and columns', async () => {
+    const { blankTable, setCell, cellText, insertRow, insertColumn, deleteRow, deleteColumn } = await import('./tableops')
+    let d = blankTable(3, 2)
+    expect(d).toEqual({ columns: ['', ''], rows: [[null, null], [null, null]] })
+    d = setCell(d, 0, 0, 'Gene')
+    d = setCell(d, 1, 1, '3.5')
+    expect(d.columns[0]).toBe('Gene')
+    expect(d.rows[0][1]).toBe(3.5)
+    expect(cellText(d, 1, 1)).toBe('3.5')
+    d = insertColumn(insertRow(d))
+    expect([d.rows.length, d.columns.length]).toEqual([3, 3])
+    d = deleteColumn(deleteRow(d, 0), 2)
+    expect([d.rows.length, d.columns.length]).toEqual([2, 2])
+  })
+
+  it('finds the cell under a point', async () => {
+    const { layoutTable, cellAt } = await import('../render/Table')
+    const { DEFAULT_TABLE_STYLE } = await import('../render/Table')
+    const l = layoutTable({ data: { columns: ['A', 'B'], rows: [[1, 2]] }, style: DEFAULT_TABLE_STYLE })
+    expect(cellAt(l, 1, 1)).toEqual({ row: 0, col: 0 })
+    expect(cellAt(l, l.colW[0] + 1, l.rowH + 1)).toEqual({ row: 1, col: 1 })
+    expect(cellAt(l, -5, 0)).toBeNull()
+  })
+})
