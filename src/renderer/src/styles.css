@@ -1251,3 +1251,35 @@ button.on-btn {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.stats-pairs {
+  margin: 0 0 8px;
+}
+.stats-results {
+  margin-top: 4px;
+  padding: 8px;
+  background: #f7f7f8;
+  border-radius: var(--radius);
+  user-select: text;
+}
+.stats-results table {
+  width: 100%;
+  margin: 6px 0 4px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.stats-results th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-strong);
+  padding: 2px 4px 2px 0;
+}
+.stats-results td {
+  padding: 2px 4px 2px 0;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.stats-results p {
+  margin: 4px 0 0;
+}

@@ -4,6 +4,7 @@ import { memo } from 'react'
 import type { ReactNode } from 'react'
 import { column, isNum, numbers } from '../model/data'
 import { center } from '../model/geometry'
+import { analyze, layoutBrackets } from '../model/significance'
 import { boxStats, errorOf, jitter, kde, linearFit, mean } from '../model/stats'
 import type { ChartObj } from '../model/types'
 import { shade } from './Brush'
@@ -108,6 +109,13 @@ export const ChartView = memo(function ChartView({ o, mode }: { o: ChartObj; mod
 
   // ---- Margins
   const titleH = o.title ? fs * 1.8 : fs * 0.6
+  // ---- Significance brackets: reserve room above the data for their stacked levels.
+  const analysis = d.mode === 'groups' && o.stats ? analyze(o) : null
+  const brackets = analysis && o.stats ? layoutBrackets(analysis.rows, o.stats) : []
+  const statFs = fs * 0.85
+  const tick = fs * 0.35
+  const levelH = statFs * 0.95 + tick + fs * 0.35
+  const statReserve = brackets.length ? (Math.max(...brackets.map((b) => b.level)) + 1) * levelH + fs * 0.2 : 0
   const yLabelW = o.yLabel ? fs * 1.6 : 0
   const yTickW = Math.max(...yTickLabels.map((l) => textWidth(l, fs * 0.9, fam)), fs) + fs * 0.6
   const left = yLabelW + yTickW + fs * 0.3
@@ -125,10 +133,11 @@ export const ChartView = memo(function ChartView({ o, mode }: { o: ChartObj; mod
   const px1 = o.x + o.w - right
   const py0 = o.y + titleH
   const py1 = Math.max(py0 + 20, o.y + o.h - bottom)
-  const y = y0.copy().range([py1, py0])
+  const y = y0.copy().range([py1, Math.min(py1 - 10, py0 + statReserve)])
   const Y = (v: number) => f(y(v))
 
   const parts: ReactNode[] = []
+  const statParts: ReactNode[] = []
   const key = (() => {
     let n = 0
     return () => n++
@@ -201,6 +210,35 @@ export const ChartView = memo(function ChartView({ o, mode }: { o: ChartObj; mod
           if (o.showPoints) parts.push(...pointsAt(cx, bw * 0.6, g.values, shade(g.color, -0.3), i + 1))
         }
       })
+      // Brackets: each sits above the data of the groups it spans and above any bracket below it.
+      const dataTop = d.groups.map((g) => {
+        if (!g.values.length) return py1
+        const m = mean(g.values)
+        const tops = o.kind === 'bar' || o.kind === 'dot' ? [m + errorOf(g.values, o.error), m] : []
+        if (o.kind !== 'bar' || o.showPoints) tops.push(Math.max(...g.values))
+        if (o.kind === 'violin') {
+          // The density outline runs 15% of the range past the largest value.
+          const [vlo, vhi] = [Math.min(...g.values), Math.max(...g.values)]
+          tops.push(vhi + ((vhi - vlo) * 0.15 || 1))
+        }
+        if (o.kind === 'bar' && !useLog) tops.push(0)
+        return Math.max(py0 + statReserve, Math.min(...tops.filter(Number.isFinite).map(y)) - (o.kind === 'bar' && !o.showPoints ? 0 : dotR))
+      })
+      const reach = dataTop.slice()
+      for (const b of brackets) {
+        const x1 = x(String(b.i))! + bw / 2 + bw * 0.04
+        const x2 = x(String(b.j))! + bw / 2 - bw * 0.04
+        const base = Math.min(...reach.slice(b.i, b.j + 1)) - fs * 0.3
+        const yb = base - tick
+        const isStars = !b.text.startsWith('p') && b.text !== 'ns'
+        statParts.push(
+          <g key={key()}>
+            <path d={`M${f(x1)} ${f(base)} V${f(yb)} H${f(x2)} V${f(base)}`} stroke={ink} strokeWidth={1} fill="none" />
+            <Label x={(x1 + x2) / 2} y={yb - (isStars ? -statFs * 0.15 : fs * 0.2)} text={b.text} size={isStars ? statFs * 1.15 : statFs} family={fam} anchor="middle" />
+          </g>
+        )
+        for (let g = b.i; g <= b.j; g++) reach[g] = yb - levelH + tick + fs * 0.3
+      }
     } else {
       const inner = scaleBand<string>()
         .domain(d.series.map((_, j) => String(j)))
@@ -293,7 +331,7 @@ export const ChartView = memo(function ChartView({ o, mode }: { o: ChartObj; mod
       </defs>
       {o.title && <Label x={(px0 + px1) / 2} y={o.y + fs * 1.2} text={o.title} size={fs * 1.1} family={fam} anchor="middle" bold />}
       {/* Value axis */}
-      <path d={`M${f(px0)} ${f(py0)} V${f(py1)}`} stroke={ink} strokeWidth={1.2} />
+      <path d={`M${f(px0)} ${f(y.range()[1])} V${f(py1)}`} stroke={ink} strokeWidth={1.2} />
       {yTicks.map((t, i) => (
         <g key={'yt' + i}>
           <path d={`M${f(px0)} ${Y(t)} h${f(-fs * 0.3)}`} stroke={ink} />
@@ -302,6 +340,7 @@ export const ChartView = memo(function ChartView({ o, mode }: { o: ChartObj; mod
       ))}
       {o.yLabel && <Label x={o.x + fs * 1.1} y={(py0 + py1) / 2} text={o.yLabel} size={fs} family={fam} anchor="middle" rotate={-90} />}
       <g clipPath={`url(#plot-${o.id})`}>{parts}</g>
+      {statParts}
       {xAxis}
       {xTitle && <Label x={(px0 + px1) / 2} y={o.y + o.h - fs * 0.4} text={xTitle} size={fs} family={fam} anchor="middle" />}
       {showLegend &&

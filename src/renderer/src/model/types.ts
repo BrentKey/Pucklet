@@ -219,6 +219,20 @@ export interface ChartObj extends BaseObj, Box {
   legend: boolean
   /** scatter / line: draw a least-squares line per series. */
   fit: boolean
+  /** bar / dot / box / violin: significance tests drawn as brackets above the groups. */
+  stats?: ChartStats
+}
+
+export type StatTest = 'none' | 'auto' | 'welch' | 'paired' | 'mannwhitney' | 'anova' | 'kruskal'
+
+export interface ChartStats {
+  test: StatTest
+  /** all pairs, each group against the first, or the pairs listed in `pairs`. */
+  compare: 'all' | 'first' | 'custom'
+  /** Column indexes, used when compare is 'custom'. */
+  pairs: [number, number][]
+  display: 'stars' | 'p' | 'both'
+  hideNs: boolean
 }
 
 export type BoxObj = RectObj | EllipseObj | TextObj | IconObj | TableObj | ChartObj

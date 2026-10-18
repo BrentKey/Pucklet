@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { commands, duplicate } from '../app/commands'
 import { licenseLabel } from '../export/export'
@@ -7,8 +8,10 @@ import { center } from '../model/geometry'
 import type { AlignMode } from '../model/ops'
 import { align, distribute } from '../model/ops'
 import { withTextSize } from '../model/transform'
-import type { BoxObj, BrushKind, BrushObj, Cap, ChartKind, ChartObj, Dash, EllipseObj, FigObject, Gradient, GroupObj, IconObj, Id, LineObj, RectObj, SmartSpec, TableObj, TextObj } from '../model/types'
+import type { BoxObj, BrushKind, BrushObj, Cap, ChartKind, ChartObj, ChartStats, Dash, EllipseObj, FigObject, Gradient, GroupObj, IconObj, Id, LineObj, RectObj, SmartSpec, TableObj, TextObj } from '../model/types'
 import { regenerate } from '../model/smart'
+import { analyze, comparisonPairs, DEFAULT_STATS, resultsText, STAT_TESTS, supportsStats } from '../model/significance'
+import { formatP, stars } from '../model/tests'
 import { resetCrop } from '../model/crop'
 import { CHART_KINDS, LAYOUT_HELP } from './DataDialogs'
 import { CHART_COLORS } from '../render/Chart'
@@ -670,6 +673,120 @@ function ChartFields({ chart }: { chart: ChartObj }) {
   )
 }
 
+function StatsFields({ chart }: { chart: ChartObj }) {
+  const st = chart.stats ?? DEFAULT_STATS
+  const set = (patch: Partial<ChartStats>) => updateEach<ChartObj>([chart.id], (ch) => ({ stats: { ...DEFAULT_STATS, ...ch.stats, ...patch } }))
+  const [copied, setCopied] = useState(false)
+  const names = chart.data.columns
+  const analysis = analyze(chart)
+  const allPairs = comparisonPairs({ ...st, compare: 'all' }, names.length)
+  const chosen = (i: number, j: number) => st.pairs.some(([a, b]) => (a === i && b === j) || (a === j && b === i))
+  const togglePair = (i: number, j: number) => set({ pairs: chosen(i, j) ? st.pairs.filter(([a, b]) => !((a === i && b === j) || (a === j && b === i))) : [...st.pairs, [i, j]] })
+  const copy = () => {
+    if (!analysis) return
+    void navigator.clipboard.writeText(resultsText(analysis)).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <Section
+      title="Statistics"
+      actions={
+        analysis?.rows.length ? (
+          <button className="link" onClick={copy}>
+            {copied ? 'Copied' : 'Copy results'}
+          </button>
+        ) : undefined
+      }
+    >
+      <Row label="Test">
+        <select value={st.test} onChange={(e) => set({ test: e.target.value as ChartStats['test'] })}>
+          {STAT_TESTS.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </Row>
+      {st.test === 'auto' && <p className="muted small">Welch's t-test for two groups, one-way ANOVA with Tukey's post-hoc test for more.</p>}
+      {st.test !== 'none' && (
+        <>
+          {names.length > 2 && (
+            <Row label="Compare">
+              <Segmented
+                value={st.compare}
+                options={[
+                  { value: 'all', label: 'All pairs' },
+                  { value: 'first', label: 'vs first', title: `Each group against ${names[0]}` },
+                  { value: 'custom', label: 'Choose' }
+                ]}
+                onChange={(compare) => set({ compare, pairs: compare === 'custom' && !st.pairs.length ? comparisonPairs({ ...st, compare: 'first' }, names.length) : st.pairs })}
+              />
+            </Row>
+          )}
+          {names.length > 2 && st.compare === 'custom' && (
+            <div className="stats-pairs">
+              {allPairs.map(([i, j]) => (
+                <label key={`${i}-${j}`} className="check small">
+                  <input type="checkbox" checked={chosen(i, j)} onChange={() => togglePair(i, j)} />
+                  {names[i]} vs {names[j]}
+                </label>
+              ))}
+            </div>
+          )}
+          <Row label="Show">
+            <Segmented
+              value={st.display}
+              options={[
+                { value: 'stars', label: 'Stars' },
+                { value: 'p', label: 'p-values' },
+                { value: 'both', label: 'Both' }
+              ]}
+              onChange={(display) => set({ display })}
+            />
+          </Row>
+          <label className="check small">
+            <input type="checkbox" checked={st.hideNs} onChange={(e) => set({ hideNs: e.target.checked })} />
+            Hide non-significant (ns)
+          </label>
+          {analysis && (
+            <div className="stats-results">
+              <div className="small">
+                <strong>{analysis.test}</strong>
+                {analysis.adjust && <span className="muted"> · {analysis.adjust}</span>}
+              </div>
+              {analysis.omnibus && <div className="small muted">{analysis.omnibus}</div>}
+              {analysis.rows.length > 0 && (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Comparison</th>
+                      <th>p</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysis.rows.map((r) => (
+                      <tr key={`${r.i}-${r.j}`}>
+                        <td>{r.label}</td>
+                        <td>{r.p < 0.0001 ? '< 0.0001' : formatP(r.p).slice(4)}</td>
+                        <td>{stars(r.p)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {analysis.warning && <p className="small error">{analysis.warning}</p>}
+              <p className="muted small">* p &lt; 0.05, ** &lt; 0.01, *** &lt; 0.001, **** &lt; 0.0001</p>
+            </div>
+          )}
+        </>
+      )}
+    </Section>
+  )
+}
+
 function TableFields({ table }: { table: TableObj }) {
   const set = (patch: Partial<TableObj['style']>) => updateEach<TableObj>([table.id], (t) => withTableSize({ ...t, style: { ...t.style, ...patch } }))
   const st = table.style
@@ -927,6 +1044,7 @@ export function PropertiesPanel() {
           <ArrangeFields ids={ids} snap={live} />
           {single?.type === 'group' && single.smart && <SmartFields group={single} />}
           {single?.type === 'chart' && <ChartFields chart={single} />}
+          {single?.type === 'chart' && supportsStats(single) && <StatsFields chart={single} />}
           {single?.type === 'table' && <TableFields table={single} />}
           {single && isBoxObj(single) && <GeometryFields o={single} />}
           {shapes.length > 0 && (
