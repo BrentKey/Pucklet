@@ -3,6 +3,7 @@ import { makeIcon } from '../model/defaults'
 import type { Pt } from '../model/geometry'
 import type { Asset, AssetSource } from '../model/types'
 import { useEditor } from '../state/editor'
+import { platform } from '../platform'
 import { parseFile } from '../model/data'
 
 export const LIBRARY_DRAG_TYPE = 'application/x-pucklet-icon'
@@ -53,6 +54,28 @@ export function placeAsset(asset: Asset, at: Pt = viewportCenter()): string {
 
 const svgCache = new Map<string, Promise<string>>()
 
+const RECENT = 'recent-icons'
+const RECENT_MAX = 18
+
+export async function loadRecentIcons(): Promise<void> {
+  try {
+    const raw = await platform.readUserData(RECENT)
+    const list = raw ? (JSON.parse(raw) as LibraryItem[]) : []
+    // Only keep well-formed entries that point into the bundled icon packs.
+    const ok = list.filter((i) => i?.pack?.id && i?.icon?.id && typeof i.href === 'string' && i.href.startsWith('icon-packs/'))
+    useEditor.getState().set({ recentIcons: ok })
+  } catch {
+    /* none yet */
+  }
+}
+
+function rememberRecent(item: LibraryItem): void {
+  const s = useEditor.getState()
+  const list = [item, ...s.recentIcons.filter((i) => !(i.pack.id === item.pack.id && i.icon.id === item.icon.id))].slice(0, RECENT_MAX)
+  s.set({ recentIcons: list })
+  void platform.writeUserData(RECENT, JSON.stringify(list)).catch(() => {})
+}
+
 export async function placeLibraryIcon(item: LibraryItem, at?: Pt): Promise<void> {
   try {
     if (!svgCache.has(item.href)) {
@@ -67,6 +90,7 @@ export async function placeLibraryIcon(item: LibraryItem, at?: Pt): Promise<void
     const markup = await svgCache.get(item.href)!
     const source: AssetSource = { library: item.pack.name, author: item.icon.author, license: item.icon.license, url: item.icon.url }
     placeAsset(processSvg(markup, item.icon.name, source), at)
+    rememberRecent(item)
   } catch (e) {
     svgCache.delete(item.href)
     useEditor.getState().showToast(`Couldn't add “${item.icon.name}”: ${(e as Error).message}`)

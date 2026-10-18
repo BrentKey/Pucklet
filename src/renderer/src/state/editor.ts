@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { create } from 'zustand'
 import { FigureDoc, newId, Snapshot } from '../model/doc'
 import type { ParsedSheet } from '../model/data'
+import type { LibraryItem } from '../library/place'
 import type { BrushKind, Cap, FigObject, Id, Route } from '../model/types'
 
 export type Tool = 'select' | 'hand' | 'rect' | 'ellipse' | 'text' | 'line' | 'arrow' | 'brush'
@@ -56,6 +57,8 @@ interface EditorState {
   editingText: Id | null
   /** Icon/image currently in crop mode: its handles crop instead of scaling. */
   cropping: Id | null
+  /** Table cell being typed into on the canvas (row 0 = header row). */
+  editingCell: { id: Id; row: number; col: number } | null
   /** Transient object versions shown while dragging; committed to the doc on release. */
   drafts: Map<Id, FigObject>
   guides: Guides
@@ -75,6 +78,8 @@ interface EditorState {
   /** View preferences, remembered between sessions. */
   prefs: Prefs
   shortcutsOpen: boolean
+  /** Library icons placed most recently (newest first), remembered between sessions. */
+  recentIcons: LibraryItem[]
   /** Data import dialog (with already-parsed sheets when a file was dropped or pasted), or the data editor for an object. */
   dataDialog: { mode: 'import'; sheets?: ParsedSheet[]; at?: { x: number; y: number } } | { mode: 'edit'; id: Id } | null
 
@@ -102,7 +107,7 @@ export function contentSignature(st: { pages: Page[]; pagesVersion: number }): s
 }
 
 /** Selection-related state that doesn't carry over to another page. */
-const PAGE_RESET = { selection: [] as Id[], context: '' as const, editingText: null, cropping: null, drafts: new Map<Id, FigObject>() }
+const PAGE_RESET = { selection: [] as Id[], context: '' as const, editingText: null, editingCell: null, cropping: null, drafts: new Map<Id, FigObject>() }
 
 export const useEditor = create<EditorState>((set, get) => ({
   pages: [initialPage],
@@ -118,6 +123,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   context: '',
   editingText: null,
   cropping: null,
+  editingCell: null,
   drafts: new Map(),
   guides: { x: [], y: [] },
   bindTarget: null,
@@ -134,6 +140,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   toast: null,
   prefs: DEFAULT_PREFS,
   shortcutsOpen: false,
+  recentIcons: [],
   dataDialog: null,
 
   set: (patch) => set(patch),

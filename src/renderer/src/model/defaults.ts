@@ -103,16 +103,17 @@ export function makeTable(z: string, data: DataTable, cx: number, cy: number): T
   return { ...t, x: cx - t.w / 2, y: cy - t.h / 2 }
 }
 
-const KIND_FOR_SHAPE: Record<DataShape, ChartKind> = { groups: 'bar', categories: 'grouped', xy: 'line' }
+const KIND_FOR_SHAPE: Record<DataShape, ChartKind> = { groups: 'bar', categories: 'grouped', xy: 'line', plate: 'plate', survival: 'survival', volcano: 'volcano' }
 
 export function makeChart(z: string, data: DataTable, cx: number, cy: number, kind?: ChartKind): ChartObj {
   const w = 480
   const h = 340
+  const k = kind ?? KIND_FOR_SHAPE[guessShape(data)]
   return {
     ...base(z),
     type: 'chart',
     name: 'Chart',
-    kind: kind ?? KIND_FOR_SHAPE[guessShape(data)],
+    kind: k,
     data,
     error: 'sd',
     showPoints: true,
@@ -127,6 +128,12 @@ export function makeChart(z: string, data: DataTable, cx: number, cy: number, ki
     logY: false,
     legend: true,
     fit: false,
+    colorScale: 'viridis',
+    showValues: k === 'pie' || k === 'donut',
+    fcThreshold: 1,
+    pThreshold: 0.05,
+    labelTop: 10,
+    bins: null,
     x: cx - w / 2,
     y: cy - h / 2,
     w,

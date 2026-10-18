@@ -193,7 +193,25 @@ export interface TableObj extends BaseObj, Box {
   style: TableStyle
 }
 
-export type ChartKind = 'bar' | 'dot' | 'box' | 'violin' | 'grouped' | 'stacked' | 'scatter' | 'line'
+export type ChartKind =
+  | 'bar'
+  | 'dot'
+  | 'box'
+  | 'violin'
+  | 'meanline'
+  | 'histogram'
+  | 'grouped'
+  | 'stacked'
+  | 'pie'
+  | 'donut'
+  | 'scatter'
+  | 'line'
+  | 'heatmap'
+  | 'plate'
+  | 'survival'
+  | 'volcano'
+
+export type ColorScaleName = 'viridis' | 'magma' | 'blues' | 'reds' | 'greens' | 'diverging'
 
 /**
  * A chart drawn from its own data table.
@@ -219,6 +237,16 @@ export interface ChartObj extends BaseObj, Box {
   legend: boolean
   /** scatter / line: draw a least-squares line per series. */
   fit: boolean
+  /** heatmap / plate: colour scale for values. */
+  colorScale?: ColorScaleName
+  /** Print values on cells, slices or wells. */
+  showValues?: boolean
+  /** volcano: |log2 fold change| and p-value cut-offs, and how many top hits to label. */
+  fcThreshold?: number
+  pThreshold?: number
+  labelTop?: number
+  /** histogram: number of bins (null = automatic). */
+  bins?: number | null
 }
 
 export type BoxObj = RectObj | EllipseObj | TextObj | IconObj | TableObj | ChartObj

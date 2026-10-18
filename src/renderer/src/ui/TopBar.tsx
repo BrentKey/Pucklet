@@ -7,6 +7,9 @@ import type { Tool, ViewFilter } from '../state/editor'
 import { useDirty, useEditor } from '../state/editor'
 import { IconButton, NumberField } from './controls'
 import { setPrefs } from '../app/prefs'
+import { viewportCenter } from '../library/place'
+import { makeTable } from '../model/defaults'
+import { blankTable } from '../model/tableops'
 import { BRUSH_PRESETS } from '../model/brush'
 import type { BrushKind } from '../model/types'
 import { Icon } from './icons'
@@ -65,6 +68,61 @@ function ViewMenu() {
           <button onClick={() => (setOpen(false), commands['help.shortcuts']())}>
             <span>Keyboard shortcuts</span>
             <kbd>?</kbd>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TablePicker() {
+  const [open, setOpen] = useState(false)
+  const [hover, setHover] = useState<[number, number]>([3, 3])
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [open])
+  const N = 8
+  const insert = (rows: number, cols: number) => {
+    setOpen(false)
+    const s = useEditor.getState()
+    const c = viewportCenter()
+    const t = makeTable(s.doc.snapshot().topZ(s.context), blankTable(rows, cols), c.x, c.y)
+    const placed = s.context ? { ...t, parentId: s.context } : t
+    s.doc.transact((tx) => tx.add(placed))
+    // Start typing in the first header cell straight away.
+    s.set({ selection: [placed.id], tool: 'select', editingCell: { id: placed.id, row: 0, col: 0 } })
+  }
+  return (
+    <div className="menu" ref={ref}>
+      <IconButton title="Insert a table to fill in" onClick={() => setOpen(!open)} active={open}>
+        <Icon.table />
+      </IconButton>
+      {open && (
+        <div className="menu-pop table-picker">
+          <div className="muted small">
+            {hover[0]} rows × {hover[1]} columns
+          </div>
+          <div className="tp-grid" onMouseLeave={() => setHover([3, 3])}>
+            {Array.from({ length: N * N }, (_, k) => {
+              const r = Math.floor(k / N) + 1
+              const c = (k % N) + 1
+              return (
+                <button
+                  key={k}
+                  className={r <= hover[0] && c <= hover[1] ? 'on' : ''}
+                  onMouseEnter={() => setHover([r, c])}
+                  onClick={() => insert(r, c)}
+                  aria-label={`${r} by ${c} table`}
+                />
+              )
+            })}
+          </div>
+          <button className="link" onClick={() => (setOpen(false), commands['file.importData']())}>
+            From a CSV or Excel file…
           </button>
         </div>
       )}
@@ -143,7 +201,8 @@ export function TopBar() {
             <t.icon />
           </IconButton>
         ))}
-        <IconButton title="Chart or table from data (CSV, Excel, paste) — ⇧⌘D" onClick={commands['file.importData']}>
+        <TablePicker />
+        <IconButton title="Chart from data (CSV, Excel, paste) — ⇧⌘D" onClick={commands['file.importData']}>
           <Icon.chart />
         </IconButton>
         <span className="toolbar-sep" />

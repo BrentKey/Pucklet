@@ -9,6 +9,7 @@ import type { ChartObj } from '../model/types'
 import { shade } from './Brush'
 import type { RenderMode } from './Figure'
 import { Label, textWidth } from './Label'
+import { EXTRA_KINDS, ExtraChart } from './ChartExtra'
 
 export const CHART_COLORS = ['#0072b2', '#e69f00', '#009e73', '#d55e00', '#cc79a7', '#56b4e9', '#f0e442', '#555555']
 
@@ -58,6 +59,19 @@ function prepare(o: ChartObj) {
 }
 
 export const ChartView = memo(function ChartView({ o, mode }: { o: ChartObj; mode: RenderMode }) {
+  if (EXTRA_KINDS.has(o.kind)) {
+    const c = center(o)
+    return (
+      <g data-id={mode === 'canvas' ? o.id : undefined} opacity={o.opacity < 1 ? o.opacity : undefined} transform={o.rotation ? `rotate(${o.rotation} ${c.x} ${c.y})` : undefined}>
+        {mode === 'canvas' && <rect x={o.x} y={o.y} width={o.w} height={o.h} fill="transparent" />}
+        <ExtraChart o={o} />
+      </g>
+    )
+  }
+  return <BasicChart o={o} mode={mode} />
+})
+
+function BasicChart({ o, mode }: { o: ChartObj; mode: RenderMode }) {
   const d = prepare(o)
   const fs = o.fontSize
   const fam = o.fontFamily
@@ -313,4 +327,4 @@ export const ChartView = memo(function ChartView({ o, mode }: { o: ChartObj; mod
         ))}
     </g>
   )
-})
+}

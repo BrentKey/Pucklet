@@ -7,9 +7,10 @@ import { center } from '../model/geometry'
 import type { AlignMode } from '../model/ops'
 import { align, distribute } from '../model/ops'
 import { withTextSize } from '../model/transform'
-import type { BoxObj, BrushKind, BrushObj, Cap, ChartKind, ChartObj, Dash, EllipseObj, FigObject, Gradient, GroupObj, IconObj, Id, LineObj, RectObj, SmartSpec, TableObj, TextObj } from '../model/types'
+import type { BoxObj, BrushKind, BrushObj, Cap, ChartKind, ChartObj, ColorScaleName, Dash, EllipseObj, FigObject, Gradient, GroupObj, IconObj, Id, LineObj, RectObj, SmartSpec, TableObj, TextObj } from '../model/types'
 import { regenerate } from '../model/smart'
 import { resetCrop } from '../model/crop'
+import { deleteColumn, deleteRow, insertColumn, insertRow } from '../model/tableops'
 import { CHART_KINDS, LAYOUT_HELP } from './DataDialogs'
 import { CHART_COLORS } from '../render/Chart'
 import { withTableSize } from '../render/Table'
@@ -549,13 +550,33 @@ function SmartFields({ group }: { group: GroupObj }) {
 const KIND_GROUPS: { label: string; layout: string }[] = [
   { label: 'Groups (columns = groups)', layout: 'groups' },
   { label: 'Categories × series', layout: 'categories' },
-  { label: 'X–Y', layout: 'xy' }
+  { label: 'Parts of a whole', layout: 'parts' },
+  { label: 'X–Y', layout: 'xy' },
+  { label: 'Matrix', layout: 'matrix' },
+  { label: 'Well plate', layout: 'plate' },
+  { label: 'Survival', layout: 'survival' },
+  { label: 'Differential expression', layout: 'volcano' }
 ]
+
+const AXIS_KINDS = new Set(['bar', 'dot', 'box', 'violin', 'meanline', 'grouped', 'stacked', 'scatter', 'line'])
+
+/** Names of the things a chart colours, in colour order. */
+function colourTargets(chart: ChartObj, layout: string): string[] {
+  const t = chart.data
+  if (layout === 'groups' && chart.kind !== 'meanline') return t.columns
+  if (chart.kind === 'meanline') return ['Line']
+  if (layout === 'parts') return t.rows.map((r) => (r[0] === null ? '' : String(r[0])))
+  if (layout === 'survival') return [...new Set(t.rows.map((r) => (t.columns.length > 2 && r[2] !== null ? String(r[2]) : 'All')))]
+  if (layout === 'volcano') return ['Up', 'Down']
+  if (layout === 'matrix' || layout === 'plate') return []
+  return t.columns.slice(1)
+}
 
 function ChartFields({ chart }: { chart: ChartObj }) {
   const set = (patch: Partial<ChartObj>) => updateEach<ChartObj>([chart.id], () => patch)
   const layout = CHART_KINDS.find((k) => k.kind === chart.kind)!.layout
-  const seriesNames = layout === 'groups' ? chart.data.columns : chart.data.columns.slice(1)
+  const seriesNames = colourTargets(chart, layout)
+  const scaled = layout === 'matrix' || layout === 'plate'
   const textInput = (key: 'title' | 'xLabel' | 'yLabel', placeholder: string) => (
     <input
       className="grow"
@@ -565,6 +586,12 @@ function ChartFields({ chart }: { chart: ChartObj }) {
       onBlur={() => useEditor.getState().doc.endGesture()}
       onChange={(e) => set({ [key]: e.target.value } as Partial<ChartObj>)}
     />
+  )
+  const check = (label: string, on: boolean, patch: (v: boolean) => Partial<ChartObj>) => (
+    <label className="check small">
+      <input type="checkbox" checked={on} onChange={(e) => set(patch(e.target.checked))} />
+      {label}
+    </label>
   )
   return (
     <Section
@@ -589,7 +616,7 @@ function ChartFields({ chart }: { chart: ChartObj }) {
         </select>
       </Row>
       <p className="muted small">{LAYOUT_HELP[layout]}</p>
-      {layout === 'groups' && (chart.kind === 'bar' || chart.kind === 'dot') && (
+      {(chart.kind === 'bar' || chart.kind === 'dot' || chart.kind === 'meanline') && (
         <Row label="Error bars">
           <Segmented
             value={chart.error}
@@ -603,42 +630,59 @@ function ChartFields({ chart }: { chart: ChartObj }) {
           />
         </Row>
       )}
+      {scaled && (
+        <Row label="Colours">
+          <select value={chart.colorScale ?? 'viridis'} onChange={(e) => set({ colorScale: e.target.value as ColorScaleName })}>
+            <option value="viridis">Viridis (colour-blind safe)</option>
+            <option value="magma">Magma</option>
+            <option value="blues">Blues</option>
+            <option value="reds">Reds</option>
+            <option value="greens">Greens</option>
+            <option value="diverging">Blue–white–red (centred on 0)</option>
+          </select>
+        </Row>
+      )}
+      {chart.kind === 'volcano' && (
+        <Row label="Cut-offs">
+          <NumberField title="|log₂FC|" value={chart.fcThreshold ?? 1} min={0} step={0.5} onChange={(fcThreshold) => set({ fcThreshold })} />
+          <NumberField title="p" value={chart.pThreshold ?? 0.05} min={0} max={1} step={0.01} precision={4} onChange={(pThreshold) => set({ pThreshold })} />
+          <NumberField title="labels" value={chart.labelTop ?? 10} min={0} max={100} precision={0} onChange={(labelTop) => set({ labelTop: Math.round(labelTop) })} />
+        </Row>
+      )}
+      {chart.kind === 'histogram' && (
+        <Row label="Bins">
+          <NumberField value={chart.bins ?? null} min={2} max={200} precision={0} onChange={(bins) => set({ bins: Math.round(bins) })} />
+          {chart.bins ? (
+            <button className="link" onClick={() => set({ bins: null })}>
+              Auto
+            </button>
+          ) : (
+            <span className="muted small">Auto</span>
+          )}
+        </Row>
+      )}
       <div className="btn-row">
-        {chart.kind !== 'dot' && chart.kind !== 'scatter' && layout !== 'categories' && (
-          <label className="check small">
-            <input type="checkbox" checked={chart.showPoints} onChange={(e) => set({ showPoints: e.target.checked })} />
-            Show points
-          </label>
-        )}
-        {layout === 'xy' && (
-          <label className="check small">
-            <input type="checkbox" checked={chart.fit} onChange={(e) => set({ fit: e.target.checked })} />
-            Linear fit (R²)
-          </label>
-        )}
-        <label className="check small">
-          <input type="checkbox" checked={chart.logY} onChange={(e) => set({ logY: e.target.checked })} />
-          Log Y
-        </label>
-        {layout !== 'groups' && (
-          <label className="check small">
-            <input type="checkbox" checked={chart.legend} onChange={(e) => set({ legend: e.target.checked })} />
-            Legend
-          </label>
-        )}
+        {['bar', 'box', 'violin', 'meanline', 'line'].includes(chart.kind) && check('Show points', chart.showPoints, (v) => ({ showPoints: v }))}
+        {layout === 'xy' && check('Linear fit (R²)', chart.fit, (v) => ({ fit: v }))}
+        {AXIS_KINDS.has(chart.kind) && check('Log Y', chart.logY, (v) => ({ logY: v }))}
+        {(scaled || layout === 'parts') && check(layout === 'parts' ? 'Show percentages' : 'Show values', chart.showValues ?? layout === 'parts', (v) => ({ showValues: v }))}
+        {['categories', 'xy', 'parts', 'survival', 'groups'].includes(layout) && chart.kind !== 'meanline' && !['bar', 'dot', 'box', 'violin'].includes(chart.kind) &&
+          check('Legend', chart.legend, (v) => ({ legend: v }))}
       </div>
       <Row label="Title">{textInput('title', 'Optional')}</Row>
-      <Row label="X axis">{textInput('xLabel', layout === 'xy' ? chart.data.columns[0] : 'Optional')}</Row>
-      <Row label="Y axis">{textInput('yLabel', 'e.g. Expression (a.u.)')}</Row>
-      <Row label="Y range">
-        <NumberField title="min" value={chart.yMin} onChange={(yMin) => set({ yMin })} />
-        <NumberField title="max" value={chart.yMax} onChange={(yMax) => set({ yMax })} />
-        {(chart.yMin !== null || chart.yMax !== null) && (
-          <button className="link" onClick={() => set({ yMin: null, yMax: null })}>
-            Auto
-          </button>
-        )}
-      </Row>
+      {layout !== 'parts' && layout !== 'plate' && <Row label="X axis">{textInput('xLabel', layout === 'xy' ? chart.data.columns[0] : 'Optional')}</Row>}
+      {AXIS_KINDS.has(chart.kind) || ['survival', 'histogram', 'volcano'].includes(chart.kind) ? <Row label="Y axis">{textInput('yLabel', 'e.g. Expression (a.u.)')}</Row> : null}
+      {(AXIS_KINDS.has(chart.kind) || scaled) && (
+        <Row label={scaled ? 'Colour range' : 'Y range'}>
+          <NumberField title="min" value={chart.yMin} onChange={(yMin) => set({ yMin })} />
+          <NumberField title="max" value={chart.yMax} onChange={(yMax) => set({ yMax })} />
+          {(chart.yMin !== null || chart.yMax !== null) && (
+            <button className="link" onClick={() => set({ yMin: null, yMax: null })}>
+              Auto
+            </button>
+          )}
+        </Row>
+      )}
       <Row label="Text">
         <select value={chart.fontFamily} onChange={(e) => set({ fontFamily: e.target.value })}>
           {FONTS.map((f) => (
@@ -650,13 +694,13 @@ function ChartFields({ chart }: { chart: ChartObj }) {
         <NumberField value={chart.fontSize} min={6} max={72} suffix="pt" onChange={(fontSize) => set({ fontSize })} />
       </Row>
       <div className="brush-colors">
-        {seriesNames.map((name, i) => (
+        {seriesNames.slice(0, 24).map((name, i) => (
           <span key={i} className="brush-color" title={name}>
             <ColorField
-              value={chart.colors[i] ?? CHART_COLORS[i % CHART_COLORS.length]}
+              value={chart.colors[i] ?? (chart.kind === 'volcano' ? ['#d55e00', '#0072b2'][i] : CHART_COLORS[i % CHART_COLORS.length])}
               onChange={(c) =>
                 updateEach<ChartObj>([chart.id], (ch) => {
-                  const colors = seriesNames.map((_, j) => ch.colors[j] ?? CHART_COLORS[j % CHART_COLORS.length])
+                  const colors = seriesNames.map((_, j) => ch.colors[j] ?? (chart.kind === 'volcano' ? ['#d55e00', '#0072b2'][j] : CHART_COLORS[j % CHART_COLORS.length]))
                   colors[i] = c
                   return { colors }
                 })
@@ -704,6 +748,23 @@ function TableFields({ table }: { table: TableObj }) {
         <NumberField value={st.borderWidth} min={0} max={10} step={0.5} suffix="px" onChange={(borderWidth) => set({ borderWidth })} />
         <ColorField value={st.borderColor} title="Rule colour" onChange={(borderColor) => set({ borderColor })} />
       </Row>
+      <Row label="Size">
+        <span className="btn-group">
+          <button title="Add a row at the bottom" onClick={() => updateEach<TableObj>([table.id], (t) => withTableSize({ ...t, data: insertRow(t.data) }))}>
+            + Row
+          </button>
+          <button title="Add a column on the right" onClick={() => updateEach<TableObj>([table.id], (t) => withTableSize({ ...t, data: insertColumn(t.data) }))}>
+            + Column
+          </button>
+          <button title="Remove the last row" onClick={() => updateEach<TableObj>([table.id], (t) => withTableSize({ ...t, data: deleteRow(t.data, t.data.rows.length - 1) }))}>
+            − Row
+          </button>
+          <button title="Remove the last column" onClick={() => updateEach<TableObj>([table.id], (t) => withTableSize({ ...t, data: deleteColumn(t.data, t.data.columns.length - 1) }))}>
+            − Col
+          </button>
+        </span>
+      </Row>
+      <p className="muted small">Double-click a cell to type in it; Tab and Enter move between cells.</p>
       <Row label="Decimals">
         <select value={st.decimals === null ? 'auto' : String(st.decimals)} onChange={(e) => set({ decimals: e.target.value === 'auto' ? null : Number(e.target.value) })}>
           <option value="auto">As entered</option>
