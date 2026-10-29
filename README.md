@@ -1,111 +1,147 @@
 # Pucklet
 
-An open-source desktop app for making clean scientific figures: drag in life-science icons, connect them with arrows that stay attached, label everything, and export real vector files you own.
+**A free, open-source desktop app for making scientific figures.** Drag in life-science icons, connect them with arrows that stay attached, plot your data with statistics, and export real vector files that you own.
 
-It's a free alternative to BioRender. Research notes are in [research/biorender-research.md](research/biorender-research.md).
+Pucklet is an attempt to recreate the core features of [BioRender](https://www.biorender.com) as open-source software: no account, no subscription, no watermark, and no licence fee to publish your own figures. It runs on macOS and Windows (and in a browser for development).
 
-- **Your files, offline.** Figures are local `.pucklet` files (an open, zipped JSON format). No account needed, no cloud.
-- **True vector export.** SVG and PDF, plus PNG at any DPI up to 1200. No watermark, no licence fee.
-- **Open icons with automatic credits.** Icons come from openly licensed libraries. Export builds the citation line for the icons you actually used.
-- **Accessibility built in.** An Okabe–Ito colour-blind-safe palette, plus grayscale and colour-blindness previews.
+![Pucklet with a three-panel figure: a mouse-to-microscope workflow, a bar chart with significance brackets, and cell icons, with the icon library browser on the left](docs/screenshots/figure.png)
+
+> **Status:** early but usable. Pucklet is a personal project and isn't affiliated with BioRender. See [What's missing](#whats-missing) for known gaps.
+
+## Why Pucklet?
+
+- **Over 11,000 open icons, built in.** Ten openly licensed scientific icon libraries, merged into one searchable, browsable catalogue (details [below](#the-icon-library)).
+- **Your files stay on your computer.** Figures are local `.pucklet` files (zipped JSON, an open format). Nothing goes to the cloud.
+- **True vector export.** SVG, PDF and PowerPoint, plus PNG at up to 1200 dpi.
+- **Credits are automatic.** Every icon keeps its author and licence, and export writes the citation line for exactly the icons you used.
+- **Made for science.** Membrane and DNA brushes, protocol and timeline builders, charts with statistical tests, multi-panel layouts with A/B/C labels, and colour-blind-safe palettes with previews.
+
+## The icon library
+
+Pucklet doesn't draw its own icons. It gathers them from public, openly licensed collections made by scientists, institutes and illustrators. Pucklet sorts all of them into one tree of 12 categories (cells & organelles, proteins & molecules, DNA & genetics, membranes, microbes, animals & plants, human anatomy, lab equipment, medical, chemistry, symbols and pictograms) with subcategories, so you can browse by topic or search across every library at once.
+
+| Library | Icons | What's in it | Licence |
+|---|---:|---|---|
+| [Science pictograms via Iconify](https://icon-sets.iconify.design) | 4,078 | Lab, biology and medical glyphs collected from dozens of open icon sets | MIT, Apache-2.0, ISC, CC0, CC BY 4.0 |
+| [Reactome](https://reactome.org/icon-lib) | 2,569 | Flat-style molecules, cells, organs and pathway elements from the Reactome pathway knowledgebase | CC BY 4.0 |
+| [Bioicons](https://bioicons.com) | 2,459 | Community life-science icons collected by Simon Dürr and contributors | CC0, CC BY 3.0/4.0, MIT, BSD |
+| [Health Icons](https://healthicons.org) | 1,498 | Public-health and medical icons, filled and outline styles | CC0 |
+| [SciDraw](https://scidraw.io) | 448 | Lab animals, neurons, cells and apparatus drawn by researchers | CC BY 4.0, CC0 |
+| [Arcadia Science organisms](https://doi.org/10.5281/zenodo.17203577) | 143 | Research organisms, as silhouettes and in three colours | CC0 |
+| [PhyloPic](https://www.phylopic.org) | 77 | Organism silhouettes across the tree of life (a curated set; ~12,000 more available, see below) | Public domain, CC0, CC BY |
+| [EMBL-EBI Expression Atlas anatomograms](https://www.ebi.ac.uk/gxa) | 26 | Organ and tissue maps of humans, mice, other animals and plants | CC BY 4.0 |
+| [SwissBioPics](https://www.swissbiopics.org) | 15 | Detailed whole-cell illustrations with labelled organelles (SIB) | CC BY 4.0 |
+| [BioDraws](https://biodraws.com) *(opt-in)* | 205 | Scientific illustrations under a share-alike licence | CC BY-SA 4.0 |
+| **Total** | **11,518** | 11,313 shown by default; 205 more when share-alike is turned on | |
+
+**How licensing works in practice:**
+
+- Every icon carries its author, source and licence into your `.pucklet` file. The export dialog (and the PowerPoint speaker notes) gives a ready-to-paste credit line for your figure legend, such as "Icons adapted from: Liver, Macrophage generic (Reactome, CC BY 4.0)." Icons that need no attribution (CC0, public domain) are left out of it.
+- Most icons are CC0 (no conditions) or CC BY (credit the author), which journals generally accept.
+- **Share-alike icons are hidden by default.** CC BY-SA means a figure that uses the icon must also be shared under CC BY-SA. To show BioDraws, tick *Include share-alike (CC BY-SA) libraries* under the library menu. Figures that use them get a note in the credit line.
+- Icons with non-commercial or no-derivatives licences are left out entirely.
+
+The icons aren't stored in this repository. `npm run icons` downloads them from each source, checks their licences, cleans up the SVGs and builds the catalogue (see [Getting started](#getting-started)). The research behind the choice of sources, and options for growing the library, is in [research/icon-sourcing.md](research/icon-sourcing.md).
+
+![Searching the icon library for "neuron" returns matches from several libraries; on the right, the Statistics panel shows ANOVA and Tukey results for the selected chart](docs/screenshots/icons-and-stats.png)
+
+## Features
+
+**Drawing and layout**
+- Shapes with fill, gradient, stroke, dash and rounded corners; rich text with sub/superscript, Greek and symbol palette.
+- Connectors (straight, curved or elbow) that stay attached to shapes and icons as you move them, with arrow, inhibition (⊣), dot and diamond ends and optional labels.
+- Smart guides and snapping, align and distribute, groups, a layers panel, rulers and grid, lock and hide.
+- Multi-panel layouts (2, 3, 2×2, 3×2, large + small…) with automatic A / a / (a) panel letters and "re-letter in reading order".
+- Several pages per file, for figures, supplementary panels or slides.
+
+**Science-specific tools**
+- **Brushes**: draw a path and get a lipid bilayer, monolayer, DNA double helix or bead filament; close the loop for a cell membrane. Any icon can also be repeated along a path.
+- **Protocol and timeline builders**: type one step per line ("Day 7: Start treatment") and Pucklet lays out numbered markers, labels and arrows. Edit the text and the layout rebuilds itself.
+- **Templates**: starter figures (cell signalling, membrane transport, graphical abstract and more). You can also save your own.
+- **Icons**: recolour each colour layer, flip, crop (rectangle, rounded or circle), and select every copy of an icon at once. You can also import your own SVG, PNG, JPG, GIF or WebP files.
+- **Accessibility**: an Okabe–Ito colour-blind-safe palette, plus grayscale and colour-blindness previews.
+
+**Charts, tables and statistics**
+- Paste cells from Excel, Google Sheets or Prism, or import CSV, TSV or `.xlsx`. Pucklet recognises the layout and suggests a chart.
+- 16 chart types: bar (mean ± SD/SEM/95% CI with points), dot, box, violin, mean ± error line, histogram, grouped and stacked bars, pie and donut, scatter and line with linear fit and R², heatmap, well-plate heatmap (6–384 wells), Kaplan–Meier survival and volcano plot.
+- **Statistics on grouped charts**: Welch's or paired t-test, Mann–Whitney U, one-way ANOVA with Tukey's HSD, or Kruskal–Wallis with Dunn's test (Holm-adjusted). Compare all pairs, each group against the first, or pairs you choose. Significance brackets stack above the bars, showing stars (* < 0.05 … **** < 0.0001) and/or p-values. The results table copies as text for your methods section.
+- Tables you can type into directly on the canvas, with publication-style rules and aligned numbers.
+
+**Export**
+- SVG, vector PDF, PNG at 72–1200 dpi (with the correct DPI tag), and PowerPoint. In PowerPoint, text, shapes, tables and straight arrows stay editable. Transparent backgrounds are supported, and multi-page files export all pages at once.
+- Copy and paste as SVG to and from Illustrator, Inkscape and other apps.
 
 ## Getting started
 
-Requires Node 22+.
+Pucklet doesn't publish ready-made downloads yet, so you build it from source. You'll need [Node.js](https://nodejs.org) 22 or newer.
 
 ```bash
+git clone https://github.com/BrentKey/Pucklet.git
+cd Pucklet
 npm install
-npm run icons      # downloads and optimizes the icon libraries (~11,500 icons from 10 sources; allow 20–30 minutes)
-npm run dev        # desktop app (Electron) with hot reload
+npm run icons      # downloads and prepares the icon libraries (allow 20–30 minutes)
+npm run dev        # opens the desktop app with live reload
 ```
 
-Other scripts:
+To build an installer for your own computer:
+
+```bash
+npm run dist:mac   # creates dist/Pucklet-<version>.dmg
+npm run dist:win   # creates dist/Pucklet-<version>.exe
+```
+
+The Mac app isn't code-signed yet, so the first time you open it macOS asks for confirmation. Right-click the app and choose **Open**.
+
+## How Pucklet compares with BioRender
+
+Pucklet covers most of BioRender's everyday figure-making: icons, connectors, brushes, templates, panels, charts and export. It goes further in a few places, such as a layers panel, recolourable brushes, statistical tests on charts and offline files. The biggest gaps are the size and consistent house style of BioRender's ~50,000-icon library, real-time collaboration and AI features. A full feature-by-feature comparison is in [research/feature-gaps.md](research/feature-gaps.md), and background research on BioRender is in [research/biorender-research.md](research/biorender-research.md).
+
+## What's missing
+
+- **Icons**: the library is smaller and less uniform in style than BioRender's. TogoTV and OpenClipart importers exist but aren't part of `npm run icons` yet (`npm run icons:togotv`, `npm run icons:openclipart-science`).
+- **Collaboration**: no real-time co-editing or comments yet. The document model (a Yjs CRDT) is built to allow it.
+- **Editing polish**: no Bézier pen tool, curved text, or in-place editing of rotated text.
+- **PowerPoint**: curved/elbow connectors and inhibition ends export as pictures rather than native lines.
+- **Packaging**: no code signing, notarisation or auto-update yet.
+
+## For developers
 
 | Command | What it does |
 |---|---|
-| `npm run web` | Runs the same UI in a browser at http://localhost:5199. This is the starting point for a web version. |
-| `npm test` | Runs unit tests for the document model, connectors, transforms and file format. |
-| `npm run typecheck` | Type-checks main, preload and renderer. |
-| `npm run build` / `npm start` | Production build, then runs it. |
-| `npm run dist:mac` / `npm run dist:win` | Builds an installer (`dist/Pucklet-<version>.dmg` / `.exe`). The Mac build is unsigned for now. |
-| `npm run icons:<library>` | Rebuild a single library, e.g. `icons:reactome`, `icons:healthicons`, `icons:iconify-science` (see package.json; `icons:phylopic -- --all` fetches every suitably licensed PhyloPic silhouette, ~12k). |
-| `npm run icon` | Re-renders `build/icon.png` from `build/icon.svg` after editing the app icon. |
-| `PUCKLET_SMOKE_DIR=/some/dir npx electron .` | After `npm run build`: launches the app, saves a screenshot, a test PDF and a JSON report to that directory, then quits. |
-
-## What works today
-
-- **Canvas**: pan (Space/H), zoom at cursor (pinch, ⌘-scroll, ⌘0 fit), artboard presets (journal column widths, graphical abstracts, slides, A4/Letter, posters).
-- **Editing**: select, marquee, shift-select, move and resize with smart guides (snap to other objects and the canvas; hold ⌘ to turn off), resize keeps proportions for icons/text (Shift toggles), rotate (Shift = 15°), nudge, group/ungroup (double-click to enter), z-order, lock, duplicate, align & distribute, undo/redo (slider and colour-picker drags count as one step).
-- **Layers panel**: every object top-most first, with show/hide, lock, rename (double-click) and drag-to-reorder or drop into a group.
-- **Shapes**: rectangles and ellipses with fill, stroke, dash and corner radius.
-- **Connectors**: straight, curved (drag the ◆ handle) or elbow, with optional text labels (double-click an arrow). Ends dropped on a shape's edge are pinned to that spot and follow the shape; ends dropped on small objects (icons, labels) attach to the whole object; lines drawn over large shapes stay free (⌥ always places freely). Dragging an arrow on its own detaches it. Ends: arrow, open arrow, inhibition (⊣), dot, diamond.
-- **Brushes (B)**: draw freehand and get a lipid bilayer, lipid monolayer, DNA double helix or bead filament along the path. Closing the loop makes a cell membrane. Reshape by dragging points, add points from the ○ midpoints, ⌥-click to delete; recolour heads/tails, strands and bases; "Make oval". Any icon can also be repeated along a path ("Repeat along a path").
-- **Templates**: a gallery of starter figures (cell signalling, membrane transport, activation/inhibition, graphical abstract) built from Pucklet's own shapes and brushes, plus **My templates**: select anything and save it for reuse (stored on your computer).
-- **Smart protocol & timeline builders**: type one step or event per line ("Day 7: Start treatment") and Pucklet lays out numbered markers, labels and connected arrows. Change the steps, direction (across/down), numbering or colour at any time from the right panel and the group rebuilds itself.
-- **Pages**: a file can hold several pages (figures, slides, supplementary panels) — add, duplicate, rename, reorder and delete from the bar under the canvas. PDF and PowerPoint export all pages at once.
-- **View**: rulers (⇧R), grid (⌘') with optional snap-to-grid, and a keyboard shortcut sheet (?).
-- **Charts from data** (⇧⌘D, the chart button, or drop/paste a spreadsheet): import CSV, TSV or Excel (.xlsx, any sheet) or paste cells from Excel, Google Sheets or Prism; Pucklet recognises the layout and suggests a chart. 16 chart types: bar (mean ± SD/SEM/95% CI with points), dot, box, violin, mean ± error line and histogram for grouped data; grouped and stacked bars; pie and donut; scatter and line with linear fit; heatmap and well-plate heatmap (6–384 wells, grid or A1-style lists) with colour-blind-safe scales; Kaplan–Meier survival with censoring; volcano plot with cut-offs and top-hit labels. Grouped charts (bar, dot, box, violin) can run statistics — Welch's or paired t-test, Mann–Whitney U, one-way ANOVA with Tukey's HSD, or Kruskal–Wallis with Dunn's test (Holm-adjusted) — across all pairs, against the first group or chosen pairs, and draw stacked significance brackets with stars (* < 0.05 … **** < 0.0001) and/or p-values; the results table copies as text. Edit the data in a built-in spreadsheet editor at any time.
-- **Tables**: insert a blank table from the toolbar (pick the size) and type straight into the cells (double-click a cell; Tab and Enter move between cells and add rows), or import one from CSV/Excel. Publication-style rules, right-aligned numbers, fixed decimals; tables stay editable in PowerPoint exports.
-- **Multi-panel figures**: one-click layouts (2, 3, 2×2, 3×2, large + small…) with panel letters in A / a / (a) / A. / a) style, plus "Re-letter panels" to renumber in reading order after you rearrange.
-- **Text**: click with the Text tool for a box that grows, or drag to make a fixed-width box that wraps (side handles change the width). Rich text with bold/italic/underline/colour, super/subscript (⇧⌘= / ⌘=), Greek & symbol palette, alignment and line height.
-- **Icons & images**: ~11,300 openly licensed icons from 10 libraries (Bioicons, Reactome, PhyloPic, Health Icons, SciDraw, SwissBioPics, EBI anatomograms, Arcadia, Iconify science pictograms, and opt-in share-alike BioDraws), organised into one browsable tree: 12 categories (cells, proteins & molecules, DNA/RNA, membranes, microbes, animals & plants, human anatomy, lab equipment, medical, chemistry, symbols, simple pictograms) with subcategories, plus recently used icons and search. Drag or click to place, recolour per colour layer, flip, crop (double-click; rectangle, rounded or circle), "select all copies".
-- **Shapes**: gradient fills (linear or radial) as well as solid.
-- **Import**: SVG, PNG, JPG, GIF, WebP via dialog, drag-and-drop or paste.
-- **Copy/paste**: copied objects go to the clipboard as SVG (paste into Inkscape/Illustrator/text editors); paste SVG markup or images from other apps.
-- **Export**: SVG, vector PDF (desktop), PNG at 72–1200 dpi with a correct DPI tag, and **PowerPoint** (text, shapes and straight arrows stay editable; icons and brushes become 300 dpi pictures). Transparent background option and a copyable credit line; PPTX puts credits in the speaker notes.
-- **Accessibility**: Okabe–Ito colour-blind-safe palette, grayscale and colour-blindness previews.
-
-## Project layout
+| `npm run dev` | Desktop app (Electron) with hot reload |
+| `npm run web` | The same UI in a browser at http://localhost:5199 |
+| `npm test` | Unit tests (document model, connectors, file format, data import, statistics) |
+| `npm run typecheck` | Type-checks the main, preload and renderer code |
+| `npm run build` / `npm start` | Production build, then run it |
+| `npm run icons:<library>` | Rebuild one icon library, e.g. `icons:reactome`. `npm run icons:phylopic -- --all` fetches every suitably licensed PhyloPic silhouette (~12,000). `npm run icons -- --include-sa` also includes Bioicons' share-alike icons. |
+| `npm run icon` | Re-renders the app icon from `build/icon.svg` |
+| `PUCKLET_SMOKE_DIR=/some/dir npx electron .` | After `npm run build`: launches the app, saves a screenshot, a test PDF and a report, then quits |
 
 ```
 src/main/            Electron main process: window, menus, file dialogs, PDF export
 src/preload/         The only bridge from the UI to Electron (contextIsolation + sandbox)
 src/renderer/src/
-  model/             Document model (Yjs), geometry, transforms, operations, .pucklet format
-  render/Figure.tsx  The one renderer, used for both the canvas and export
+  model/             Document model (Yjs), geometry, operations, file format, statistics
+  render/            The one SVG renderer, used for both the canvas and every export
   canvas/            Interaction: tools, selection handles, text editor, viewport
-  assets/svg.ts      SVG sanitizing/normalizing (DOMPurify), recolouring, raster import
-  library/           Icon packs (loading, placing, importing files) and templates
-  export/            SVG/PNG export, PNG DPI tagging, credit lines
-  platform/          Electron vs browser adapters (open/save/export/menus)
-  ui/                Panels, toolbar, controls, export dialog
-scripts/             Icon-pack builders
-research/            BioRender feature, UX and community research
+  assets/            SVG sanitizing, recolouring, raster import
+  library/           Icon packs, the category tree and templates
+  export/            SVG/PNG/PPTX export, DPI tagging, credit lines
+  platform/          Electron vs browser adapters
+  ui/                Panels, toolbar, dialogs
+scripts/             Icon-library builders (one per source)
+research/            BioRender feature, UX and icon-sourcing research
 ```
 
-## Design notes
+**Design choices**
+- The canvas is plain SVG in the page, not a bitmap canvas library. Icons render exactly as drawn, recolouring is an attribute change, and SVG export loses nothing.
+- The document is a Yjs CRDT: a flat object map with stable ids and fractional-index z-order. It gives undo/redo today and room for real-time collaboration later.
+- All operating-system access goes through `platform/`, so the same UI runs in a browser.
+- Imported SVGs are sanitized (scripts, event handlers, `foreignObject` and external references are removed). In production, the UI loads from a custom `app://` scheme with a strict Content-Security-Policy.
+- All dependencies are permissively licensed (MIT, ISC, Apache-2.0 or CC0).
 
-**The canvas is plain SVG in the DOM, not a bitmap canvas library.**
-- Icons render exactly as drawn.
-- Recolouring is an attribute swap.
-- SVG export loses nothing.
-- Every dependency is MIT/Apache-licensed. tldraw was ruled out because of its licence.
-
-**The document is a Yjs CRDT.** That gives undo/redo today, and leaves room for real-time collaboration later. It uses:
-- a flat object map with `parentId` for groups
-- fractional-index z-order
-- stable ids
-
-**All OS access goes through `platform/`.** The renderer already runs unchanged in a browser (`npm run web`).
-
-**Security.**
-- Imported and loaded SVGs are re-sanitized: scripts, event handlers, `foreignObject` and external references are stripped.
-- In production, the renderer is served from a custom `app://` scheme with a strict Content-Security-Policy.
-
-## Icon licensing
-
-Share-alike (CC BY-SA) libraries such as BioDraws are hidden unless you tick "Include share-alike libraries" in the Icons panel; figures using them get a note in the credit line.
-
-`npm run icons` includes only CC0, MIT, BSD, CC BY 3.0 and CC BY 4.0 icons from [Bioicons](https://bioicons.com). Add `-- --include-sa` to also include CC BY-SA icons, which carry share-alike obligations. Each icon's author and licence travels with it into your `.pucklet` file and the export credit line.
-
-## Known gaps / next steps
-
-- **Icons**: TogoTV and OpenClipart scripts exist but are slow (`npm run icons:togotv`, `icons:openclipart-science`) and aren't part of `npm run icons` yet. NIH BioArt has no public API and is PNG-only. See `research/icon-sourcing.md` for paper-sourced and AI-generated icon options.
-- **More templates**: e.g. immune cell interactions, CRISPR workflow, organ-level figures. They're easy to add in `src/renderer/src/library/templates.ts`.
-- **Editing polish**: editing rotated text in place, brush colour presets.
-- **Packaging**: the Mac app is unsigned, so macOS warns on first launch (right-click the app → Open). Signing/notarisation needs an Apple Developer ID ($99/year); Windows signing needs a code-signing certificate. Auto-update is not set up.
-- **PowerPoint export**: elbow/curved connectors and inhibition (⊣) ends export as pictures rather than native lines.
+Bug reports and pull requests are welcome. New templates are easy to add in `src/renderer/src/library/templates.ts`.
 
 ## Licence
 
-[MPL-2.0](LICENSE). Anyone can use, embed or ship the app, including commercially. Changes to its source files must be shared back under the same licence.
+Pucklet is released under the [Mozilla Public License 2.0](LICENSE). Anyone can use, embed or ship it, including commercially. Changes to its source files must be shared under the same licence. Icons keep their own licences, listed above and in every export's credit line.
